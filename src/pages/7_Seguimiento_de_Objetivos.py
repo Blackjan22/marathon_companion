@@ -1,7 +1,7 @@
 # pages/7_🤖_Coach_IA.py
 import streamlit as st
 import pandas as pd
-from datetime import datetime, time
+from datetime import datetime, time, timedelta, timezone
 import os
 from openai import OpenAI
 
@@ -12,18 +12,20 @@ from utils.formatting import format_pace
 # --- Configuración de la Página y Carga de Datos ---
 st.set_page_config(layout="wide")
 st.title("🤖 Coach con Inteligencia Artificial")
-st.markdown("Tu entrenador personal basado en datos y IA, potenciado por Llama 3.1 vía DeepInfra.")
+st.markdown("Tu entrenador personal basado en datos y IA. Analiza tu progreso y diseña tu plan de carrera.")
 
 # Usamos st.cache_data para cargar los datos una sola vez por sesión
 @st.cache_data
 def load_all_data():
-    return load_data()
+    activities, splits = load_data()
+    # Asegurarnos de que la fecha es datetime para poder operar
+    activities['start_date_local'] = pd.to_datetime(activities['start_date_local'])
+    return activities, splits
 
 activities, splits = load_all_data()
 
-# --- 1. CONFIGURACIÓN DE CONEXIÓN (Sin cambios) ---
+# --- 1. CONFIGURACIÓN DE CONEXIÓN ---
 st.sidebar.header("Configuración de Conexión")
-# (El código para el certificado y la API key se mantiene igual)
 cert_path = os.path.expanduser("~/Credentials/rootcaCert.pem")
 if os.path.exists(cert_path):
     os.environ["SSL_CERT_FILE"] = cert_path
@@ -42,130 +44,279 @@ except KeyError:
 def get_llm_response(chat_history):
     if not client: return None
     try:
-        chat_completion = client.chat.completions.create(model="meta-llama/Meta-Llama-3.1-8B-Instruct", messages=chat_history)
+        chat_completion = client.chat.completions.create(
+            model="mistralai/Mixtral-8x7B-Instruct-v0.1", # <-- ¡Cambiado!
+            messages=chat_history,
+            temperature=0.5,
+            max_tokens=1500
+        )
         return chat_completion.choices[0].message.content
     except Exception as e:
         st.error(f"Error al contactar con la API: {e}")
         return None
 
-# --- FUNCIÓN DE CONTEXTO MEJORADA ---
-def generar_contexto_completo(goal_info, df_activities, df_splits, num_entrenos=10):
-    contexto = ""
-    # 1. Objetivo del Atleta
+# --- 2. CONSTANTES DE PROMPTS (Sin cambios) ---
+SYSTEM_PROMPT = """
+Eres "Coach IA", un entrenador de running de élite, científico del deporte y estratega. Tu metodología se basa en los siguientes pilares:
+1.  **Periodización Inversa y Polarizada:** Adaptas el plan según el tiempo restante hasta el objetivo. Priorizas la base aeróbica lejos del objetivo y el trabajo de alta intensidad cerca de la competición.
+2.  **Análisis Basado en Datos:** Todas tus recomendaciones se fundamentan EXCLUSIVAMENTE en el contexto de datos proporcionado (objetivo, historial, métricas). No inventas información.
+3.  **Sostenibilidad y Prevención de Lesiones:** Priorizas la consistencia sobre la intensidad desmedida. Exploras los datos en busca de signos de fatiga o sobreentrenamiento.
+4.  **Comunicación Clara y Motivadora:** Eres directo, profesional y didáctico. Explicas el "porqué" de cada entrenamiento (propósito fisiológico) y cómo encaja en el plan general. Utilizas Markdown (títulos, negritas, listas) para estructurar tus respuestas y hacerlas fáciles de leer.
+5.  **Enfoque en Ritmos, no solo en Distancias:** Siempre asocias las distancias con ritmos objetivo, zonas de frecuencia cardíaca o esfuerzo percibido (RPE).
+"""
+PROMPT_ANALISIS_INICIAL = """
+Analiza en profundidad el contexto completo que te he proporcionado y presenta tus conclusiones en el siguiente formato estructurado:
+
+1.  **Diagnóstico General:** Basado en la fase de entrenamiento actual (Base, Construcción, Pico, Tapering) y los días restantes, evalúa la viabilidad del objetivo.
+2.  **Puntos Fuertes:** Identifica las fortalezas del atleta basándote en su historial (ej. buena base de km, buen ritmo en tiradas largas, consistencia).
+3.  **Áreas de Mejora Clave:** Señala las debilidades o áreas prioritarias a trabajar para alcanzar el objetivo (ej. mejorar la resistencia a la velocidad, aumentar el volumen semanal, trabajar la consistencia en los splits).
+4.  **Veredicto y Siguientes Pasos:** Ofrece una conclusión (ej. "Vas por excelente camino", "Objetivo ambicioso pero alcanzable con un plan enfocado", "Necesitamos reajustar el plan"). Finaliza abriendo la puerta a preguntas.
+"""
+PROMPT_PROXIMOS_ENTRENOS = """
+Basado en el análisis previo y la fase actual de entrenamiento, diseña los dos (2) entrenamientos clave para la próxima semana.
+
+**REGLAS DE PROGRESIÓN OBLIGATORIAS:**
+1.  **Principio de Sobrecarga Progresiva:** La tirada larga de esta semana no debe suponer un salto drástico. Como regla general, no debería aumentar más de un 10-15% sobre la tirada más larga registrada en el historial reciente. La seguridad y la prevención de lesiones son la máxima prioridad.
+2.  **Adecuación a la Fase:** El contexto indica que el atleta está en "Fase de Base" (con más de 4 meses para el objetivo). El foco principal es construir una base aeróbica. Por tanto, prioriza la consistencia y el volumen a ritmos cómodos sobre la alta intensidad. Las series o trabajos de velocidad, si se incluyen, deben ser introductorios y muy cortos.
+3.  **Realismo:** Las propuestas deben ser seguras y realistas para un atleta amateur que busca una mejora gradual.
+
+Para cada entrenamiento, detalla:
+- **Título del Entrenamiento:** (Ej: "Tirada Larga Cómoda", "Fartlek Introductorio")
+- **Objetivo Principal:** Explica brevemente el propósito fisiológico en esta fase del plan.
+- **Estructura Detallada:** Describe las fases (calentamiento, parte principal, enfriamiento) con distancias y/o duraciones y ritmos/esfuerzos realistas.
+- **Justificación de la Progresión:** Explica por qué este nivel de volumen e intensidad es el paso lógico y seguro siguiente para el atleta, conectando directamente con su historial (ej. "Como tu última tirada fue de 14.5km, proponemos una de 16km para seguir la regla del 10-15%...").
+"""
+PROMPT_OBJETIVO_MENSUAL = """
+Teniendo en cuenta el objetivo final y el progreso actual, define un micro-objetivo SMART (Específico, Medible, Alcanzable, Relevante, Temporal) para los próximos 30 días.
+El objetivo debe ser un indicador claro de progreso.
+Ejemplos: "Ser capaz de correr 10km a un ritmo X:XX/km de forma sostenida", "Alcanzar un volumen semanal de XX km durante al menos dos semanas consecutivas".
+Justifica por qué este micro-objetivo es crucial en la fase actual del plan.
+"""
+
+# --- 3. FUNCIÓN DE CONTEXTO (Sin cambios) ---
+def generar_contexto_experto(goal_info, df_activities, df_splits, num_entrenos=10):
+    hoy = datetime.now().date()
+    contexto = f"# CONTEXTO DEL ATLETA - Fecha del Análisis: {hoy.strftime('%Y-%m-%d')}\n\n"
+
     goal_time_seconds = goal_info['time'].hour * 3600 + goal_info['time'].minute * 60 + goal_info['time'].second
-    goal_pace_min_km = (goal_time_seconds / 60) / goal_info['dist']
-    contexto += f"OBJETIVO DEL ATLETA:\n"
-    contexto += f"- Carrera: {goal_info['name']}\n- Distancia: {goal_info['dist']} km\n- Tiempo Objetivo: {goal_info['time'].strftime('%H:%M:%S')}\n- Ritmo Requerido: {format_pace(goal_pace_min_km)} /km\n- Días Restantes: {goal_info['days_left']} días\n\n"
-    
+    goal_pace_min_km = (goal_time_seconds / 60) / goal_info['dist'] if goal_info['dist'] > 0 else 0
+    contexto += "## 1. EL OBJETIVO\n"
+    contexto += f"- **Carrera:** {goal_info['name']}\n"
+    contexto += f"- **Distancia:** {goal_info['dist']} km\n"
+    contexto += f"- **Tiempo Objetivo:** {goal_info['time'].strftime('%H:%M:%S')}\n"
+    contexto += f"- **Ritmo Requerido:** {format_pace(goal_pace_min_km)} /km\n"
+    contexto += f"- **Días Restantes:** {goal_info['days_left']} días\n\n"
+
     if df_activities.empty:
-        contexto += "No hay datos de entrenamiento disponibles."
+        contexto += "## 2. SITUACIÓN ACTUAL\n"
+        contexto += "**Alerta:** No hay datos de entrenamiento disponibles para analizar.\n"
         return contexto
 
-    # 2. Métricas Clave del Historial Completo
+    contexto += "## 2. SITUACIÓN ACTUAL\n"
+    if goal_info['days_left'] > 120: fase = "Fase de Base (más de 4 meses)"
+    elif 60 < goal_info['days_left'] <= 120: fase = "Fase de Construcción (2-4 meses)"
+    elif 14 < goal_info['days_left'] <= 60: fase = "Fase de Pico (1-2 meses)"
+    else: fase = "Fase de Tapering/Competición (últimas 2 semanas)"
+    contexto += f"- **Fase de Entrenamiento Actual:** {fase}\n\n"
+
+    contexto += "### Resumen de Carga (Últimas 4 Semanas)\n"
+    four_weeks_ago = datetime.now(timezone.utc) - timedelta(weeks=4)
+    recent_activities = df_activities[df_activities['start_date_local'] >= four_weeks_ago]
+
+    if not recent_activities.empty:
+        total_dist_4_weeks = recent_activities['distance_km'].sum()
+        num_entrenos_4_weeks = len(recent_activities)
+        avg_weekly_dist = total_dist_4_weeks / 4
+        contexto += f"- **Volumen Semanal Promedio:** {avg_weekly_dist:.2f} km/semana\n"
+        contexto += f"- **Entrenamientos por Semana (promedio):** {num_entrenos_4_weeks / 4:.1f}\n\n"
+    else:
+        contexto += "- No se han registrado entrenamientos en las últimas 4 semanas.\n\n"
+
+    contexto += "### Hitos Históricos y Mejor Rendimiento\n"
     all_time_longest_run = df_activities['distance_km'].max()
     long_runs_df = df_activities[df_activities['distance_km'] > 10]
     best_perf_run = long_runs_df.loc[long_runs_df['pace_min_km'].idxmin()] if not long_runs_df.empty else None
-    
-    contexto += "MÉTRICAS CLAVE HISTÓRICAS:\n"
-    contexto += f"- Tirada más larga jamás registrada: {all_time_longest_run:.2f} km.\n"
-    if best_perf_run is not None:
-        contexto += f"- Mejor rendimiento (distancia/ritmo): carrera de {best_perf_run['distance_km']:.2f} km a un ritmo de {format_pace(best_perf_run['pace_min_km'])}/km.\n\n"
-    else:
-        contexto += "- No hay carreras de más de 10km para determinar el mejor rendimiento.\n\n"
 
-    # 3. Historial de los últimos entrenamientos con splits
-    contexto += f"HISTORIAL DE LOS ÚLTIMOS {num_entrenos} ENTRENAMIENTOS:\n"
-    for index, entreno in df_activities.head(num_entrenos).iterrows():
-        contexto += f"\n- Fecha: {entreno['start_date_local'].strftime('%Y-%m-%d')}, Dist: {entreno['distance_km']:.2f} km, Ritmo: {format_pace(entreno['pace_min_km'])}/km\n"
+    contexto += f"- **Tirada más larga registrada:** {all_time_longest_run:.2f} km.\n"
+    if best_perf_run is not None:
+        contexto += f"- **Mejor rendimiento (>10k):** Carrera de {best_perf_run['distance_km']:.2f} km a un ritmo de {format_pace(best_perf_run['pace_min_km'])}/km.\n\n"
+    else:
+        contexto += "- Sin registros de carreras de más de 10km para determinar el mejor rendimiento.\n\n"
+
+    contexto += f"## 3. HISTORIAL DETALLADO DE LOS ÚLTIMOS {num_entrenos} ENTRENAMIENTOS\n"
+    df_activities_sorted = df_activities.sort_values(by='start_date_local', ascending=False)
+    for _, entreno in df_activities_sorted.head(num_entrenos).iterrows():
+        contexto += f"- **Fecha: {entreno['start_date_local'].strftime('%Y-%m-%d')}** | Dist: {entreno['distance_km']:.2f} km | Ritmo: {format_pace(entreno['pace_min_km'])}/km | Desnivel: {entreno['total_elevation_gain']} m\n"
         splits_entreno = df_splits[df_splits['activity_id'] == entreno['id']]
         if not splits_entreno.empty:
             splits_str = ", ".join([f"Km{int(s['split'])}: {format_pace(s['pace_min_km'])}" for _, s in splits_entreno.iterrows()])
-            contexto += f"  - Splits: [{splits_str}]\n"
-            
+            contexto += f"  - `Splits: [{splits_str}]`\n"
+
     return contexto
 
-# --- Interfaz de Usuario ---
-with st.container(border=True):
-    st.subheader("Define tu Meta")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        goal_name = st.text_input("Nombre del objetivo", "Media Maratón", key="goal_name")
-        goal_dist = st.number_input("Distancia (km)", min_value=0.1, value=21.1, step=0.1, format="%.2f", key="goal_dist")
-    with col2:
-        default_date = datetime.now().date() + pd.DateOffset(months=6)
-        goal_date = st.date_input("Fecha de la carrera", default_date, key="goal_date")
-        default_time = time(1, 34, 56)
-        goal_time = st.time_input("Tiempo objetivo", default_time, key="goal_time")
-    with col3:
-        days_left = (goal_date - datetime.now().date()).days
-        st.metric(label="⏳ Días hasta el Desafío", value=days_left if days_left >= 0 else "¡Ya pasó!")
+# --- 4. LÓGICA DE CÁLCULO DINÁMICO ---
+def seconds_to_time(total_seconds):
+    if total_seconds < 0: total_seconds = 0
+    hours, remainder = divmod(int(total_seconds), 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return time(hour=min(23, hours), minute=minutes, second=seconds)
 
-# --- Inicialización del Estado ---
+def time_to_seconds(time_obj):
+    return time_obj.hour * 3600 + time_obj.minute * 60 + time_obj.second
+
+## CORRECCIÓN: Nueva función para convertir segundos a un objeto 'time' que represente el ritmo.
+def seconds_to_pace_time(pace_seconds):
+    """Convierte segundos de ritmo a un objeto time para el widget (MM:SS)."""
+    if pace_seconds < 0: pace_seconds = 0
+    # Usamos el campo 'hour' para guardar los minutos y 'minute' para los segundos.
+    minutes, seconds = divmod(int(pace_seconds), 60)
+    return time(hour=minutes, minute=seconds)
+
+def update_from_time():
+    dist = st.session_state.goal_dist
+    if dist > 0:
+        total_seconds = time_to_seconds(st.session_state.goal_time)
+        pace_seconds = total_seconds / dist
+        ## CORRECCIÓN: Usar la nueva función para almacenar el ritmo correctamente.
+        st.session_state.goal_pace = seconds_to_pace_time(pace_seconds)
+
+def update_from_pace():
+    dist = st.session_state.goal_dist
+    if dist > 0:
+        pace_obj = st.session_state.goal_pace
+        ## CORRECCIÓN: Interpretar el input del ritmo correctamente (HH:MM -> MM:SS).
+        pace_seconds = pace_obj.hour * 60 + pace_obj.minute
+        total_seconds = pace_seconds * dist
+        st.session_state.goal_time = seconds_to_time(total_seconds)
+
+# --- 5. INICIALIZACIÓN DEL ESTADO DE SESIÓN ---
+if 'goal_dist' not in st.session_state:
+    st.session_state.goal_dist = 21.1
+if 'goal_time' not in st.session_state:
+    st.session_state.goal_time = time(1, 34, 56) # Tiempo realista para 21.1k a 4:30/km
+if 'goal_pace' not in st.session_state:
+    ## CORRECCIÓN: Usar la nueva función para la inicialización.
+    pace_seconds = time_to_seconds(st.session_state.goal_time) / st.session_state.goal_dist
+    st.session_state.goal_pace = seconds_to_pace_time(pace_seconds)
+if 'input_method' not in st.session_state:
+    st.session_state.input_method = "Ritmo"
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "last_analysis_context" not in st.session_state:
     st.session_state.last_analysis_context = ""
 
-# Botón principal para generar el análisis base
-if st.button("Generar Análisis del Coach IA", type="primary", disabled=(not api_key)):
-    st.session_state.messages = [] # Reiniciar chat
-    st.session_state.pop('next_workouts_plan', None) # Borrar planes anteriores
+# --- 6. INTERFAZ DE USUARIO ---
+with st.container(border=True):
+    st.subheader("Define tu Meta")
+
+    goal_name = st.text_input("Nombre de la carrera objetivo", "Media Maratón de Barcelona")
+
+    st.radio(
+        "¿Cómo quieres definir tu objetivo?",
+        ["Tiempo", "Ritmo"],
+        key="input_method",
+        horizontal=True,
+    )
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.number_input(
+            "Distancia (km)", min_value=0.1, step=1.0, format="%.2f", key="goal_dist",
+            on_change=update_from_time if st.session_state.input_method == "Tiempo" else update_from_pace,
+        )
+
+    if st.session_state.input_method == "Tiempo":
+        with col2:
+            st.time_input("Tiempo objetivo", key="goal_time", on_change=update_from_time)
+        with col3:
+            ## CORRECCIÓN: Formatear la métrica del ritmo manualmente.
+            pace_obj = st.session_state.goal_pace
+            pace_display = f"{pace_obj.hour:02d}:{pace_obj.minute:02d}"
+            st.metric("Ritmo Calculado", value=f"{pace_display} min/km")
+    else: # input_method es "Ritmo"
+        with col2:
+            # El step de 1 minuto es más usable para el ritmo
+            st.time_input("Ritmo objetivo (min/km)", key="goal_pace", on_change=update_from_pace, step=timedelta(minutes=1))
+        with col3:
+            st.metric("Tiempo Calculado", value=f"{st.session_state.goal_time.strftime('%H:%M:%S')}")
+
+    goal_date = st.date_input("Fecha de la carrera", datetime(2026, 2, 15).date())
+    days_left = (goal_date - datetime.now().date()).days
+    st.metric(label="⏳ Días hasta el Desafío", value=f"{days_left} días" if days_left >= 0 else "¡Ya pasó!")
+
+# --- 7. LÓGICA DE BOTONES Y CHAT (Sin cambios) ---
+if st.button("Generar Análisis del Coach IA", type="primary", use_container_width=True, disabled=(not api_key)):
+    st.session_state.messages = []
+    st.session_state.pop('next_workouts_plan', None)
     st.session_state.pop('monthly_goal_plan', None)
-    
-    goal_info = {'name': goal_name, 'dist': goal_dist, 'time': goal_time, 'date': goal_date, 'days_left': days_left}
-    contexto = generar_contexto_completo(goal_info, activities, splits)
-    st.session_state.last_analysis_context = contexto # Guardamos el contexto para usarlo en las acciones rápidas
-    
-    system_prompt = "Actúa como 'Coach AI', un entrenador de running de élite, positivo y experto. Analiza el contexto proporcionado y da un análisis inicial con puntos fuertes, áreas de mejora y un plan de acción. Luego, responde a las preguntas de seguimiento del usuario."
-    st.session_state.messages.append({"role": "system", "content": system_prompt})
-    st.session_state.messages.append({"role": "user", "content": f"Hola Coach, aquí tienes mi objetivo y mi historial. ¿Cuál es tu análisis?\n\n{contexto}"})
-    
-    with st.spinner("Analizando tu perfil completo..."):
+
+    goal_info = {
+        'name': goal_name,
+        'dist': st.session_state.goal_dist,
+        'time': st.session_state.goal_time,
+        'date': goal_date,
+        'days_left': days_left
+    }
+    contexto = generar_contexto_experto(goal_info, activities, splits)
+    st.session_state.last_analysis_context = contexto
+
+    st.session_state.messages.append({"role": "system", "content": SYSTEM_PROMPT})
+    user_request = f"{PROMPT_ANALISIS_INICIAL}\n\n--- INICIO DEL CONTEXTO ---\n{contexto}\n--- FIN DEL CONTEXTO ---"
+    st.session_state.messages.append({"role": "user", "content": user_request})
+
+    with st.spinner("Coach IA está analizando tu perfil completo..."):
         response = get_llm_response(st.session_state.messages)
         st.session_state.messages.append({"role": "assistant", "content": response})
     st.rerun()
 
-# --- NUEVA SECCIÓN: ACCIONES RÁPIDAS ---
-st.subheader("Acciones Rápidas del Coach")
+# --- ACCIONES RÁPIDAS ---
+st.subheader("Plan de Acción del Coach")
 col1, col2 = st.columns(2)
 
-with col1:
-    if st.button("Sugerir Próximos Entrenamientos", disabled=(not st.session_state.last_analysis_context)):
-        prompt_entrenos = "Basado en todo el contexto anterior sobre mi objetivo y mi estado de forma, sugiéreme los dos próximos entrenamientos clave para esta semana: una tirada larga y una sesión de series. Describe la distancia, el ritmo objetivo para cada parte y el propósito de cada entrenamiento."
-        action_history = [{"role": "system", "content": st.session_state.messages[0]['content']}, {"role": "user", "content": st.session_state.last_analysis_context}, {"role": "user", "content": prompt_entrenos}]
-        with st.spinner("Diseñando tus próximos entrenos..."):
-            st.session_state.next_workouts_plan = get_llm_response(action_history)
+def handle_action(prompt_template, session_state_key):
+    if st.session_state.last_analysis_context:
+        action_history = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"Este es mi contexto completo:\n{st.session_state.last_analysis_context}"},
+            {"role": "user", "content": prompt_template}
+        ]
+        spinner_message = " ".join(session_state_key.replace('_', ' ').capitalize().split()[:-1])
+        with st.spinner(f"Diseñando tu {spinner_message}..."):
+            st.session_state[session_state_key] = get_llm_response(action_history)
         st.rerun()
 
+with col1:
+    if st.button("Sugerir Próximos Entrenamientos", use_container_width=True, disabled=(not st.session_state.last_analysis_context)):
+        handle_action(PROMPT_PROXIMOS_ENTRENOS, 'next_workouts_plan')
+
 with col2:
-    if st.button("Plantear Objetivo Mensual", disabled=(not st.session_state.last_analysis_context)):
-        prompt_objetivo = f"Considerando mi objetivo final ({goal_name}) y mi progreso actual, establece un 'mini-objetivo' realista y medible para el final del mes actual. Por ejemplo, ¿qué volumen semanal debería alcanzar, o qué ritmo debería poder mantener en una carrera de 10km para saber que voy por buen camino?"
-        action_history = [{"role": "system", "content": st.session_state.messages[0]['content']}, {"role": "user", "content": st.session_state.last_analysis_context}, {"role": "user", "content": prompt_objetivo}]
-        with st.spinner("Calculando tu objetivo mensual..."):
-            st.session_state.monthly_goal_plan = get_llm_response(action_history)
-        st.rerun()
-        
-# Mostrar resultados de las acciones rápidas
+    if st.button("Plantear Objetivo Mensual", use_container_width=True, disabled=(not st.session_state.last_analysis_context)):
+        handle_action(PROMPT_OBJETIVO_MENSUAL, 'monthly_goal_plan')
+
 if 'next_workouts_plan' in st.session_state and st.session_state.next_workouts_plan:
-    with st.expander("🗓️ Plan de Próximos Entrenamientos", expanded=True):
+    with st.expander("🗓️ Plan de Próximos Entrenamientos Clave", expanded=True):
         st.markdown(st.session_state.next_workouts_plan)
 if 'monthly_goal_plan' in st.session_state and st.session_state.monthly_goal_plan:
-    with st.expander("🎯 Tu Objetivo para Final de Mes", expanded=True):
+    with st.expander("🎯 Tu Micro-Objetivo para los Próximos 30 Días", expanded=True):
         st.markdown(st.session_state.monthly_goal_plan)
 
 # --- CHAT ABIERTO ---
-st.subheader("Conversa con tu Coach")
-# Mostrar historial de chat visible
-for message in st.session_state.messages[2:]: # Omitir system y el contexto inicial
-     with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+st.subheader("Conversa con tu Coach IA")
+chat_display_messages = [msg for msg in st.session_state.messages if msg['role'] in ['assistant', 'user']]
 
-if prompt := st.chat_input("Haz una pregunta de seguimiento...", disabled=(not api_key)):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"): st.markdown(prompt)
+if chat_display_messages:
     with st.chat_message("assistant"):
-        with st.spinner("Pensando..."):
-            response = get_llm_response(st.session_state.messages)
-            st.markdown(response)
-    st.session_state.messages.append({"role": "assistant", "content": response})
+        st.markdown(chat_display_messages[0]['content'])
+
+    for message in chat_display_messages[1:]:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+if prompt := st.chat_input("Haz una pregunta de seguimiento...", disabled=(not api_key or not st.session_state.messages)):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+
+    with st.spinner("Pensando..."):
+        response = get_llm_response(st.session_state.messages)
+        st.session_state.messages.append({"role": "assistant", "content": response})
     st.rerun()

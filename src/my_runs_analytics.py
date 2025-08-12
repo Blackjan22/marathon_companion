@@ -4,7 +4,7 @@ from strava_client import sync_new_activities  # Asumiendo que este archivo exis
 
 # Configuración principal de la página. Solo se llama una vez.
 st.set_page_config(
-    page_title="Marathon Companion Analytics",
+    page_title="Running Analytics",
     page_icon="🏃‍♂️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -30,7 +30,7 @@ if st.sidebar.button("🔄 Refrescar actividades"):
 
 
 # --- PÁGINA PRINCIPAL ---
-st.title("🏃‍♂️ Marathon Companion Analytics")
+st.title("🏃‍♂️ My Runs Analytics")
 st.header("Bienvenido a tu panel de análisis de carreras")
 
 st.info("Selecciona una de las páginas en el menú de la izquierda para comenzar el análisis.")
@@ -44,6 +44,7 @@ Esta aplicación te permite visualizar y analizar todas las carreras que has sin
 - **Tendencias Temporales:** Descubre tus patrones de entrenamiento semanales y mensuales.
 - **Análisis de Splits:** Revisa el ritmo de cada kilómetro en carreras específicas.
 - **Histórico Completo:** Una tabla con todas tus actividades para buscar y filtrar.
+- **Coach:** Un entrenador personal basado en IA.
 
 ¡Usa el menú de la izquierda para navegar!
 """)

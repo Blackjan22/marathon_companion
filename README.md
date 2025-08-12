@@ -1,4 +1,4 @@
-# 🏃 marathon_companion
+# 🏃 running_analytics
 
 Aplicación local para descargar, analizar y visualizar entrenamientos de running desde Strava, con el objetivo de preparar una media maratón y generar resúmenes automáticos con GPT.
 
@@ -6,7 +6,7 @@ Aplicación local para descargar, analizar y visualizar entrenamientos de runnin
 
 ## 📦 Estructura del proyecto
 
-marathon_companion/
+running_analytics/
 ├── data/                    # Entrenos descargados (SQLite)
 │   └── strava_activities.db
 ├── notebooks/              # Análisis y pruebas
@@ -42,8 +42,8 @@ marathon_companion/
 ## ⚙️ Instalación
 
 # 1. Clonar el proyecto
-git clone git@github.com:tuusuario/marathon_companion.git
-cd marathon_companion
+git clone git@github.com:tuusuario/running_analytics.git
+cd running_analytics
 
 # 2. Crear entorno virtual
 python -m venv .venv
@@ -65,7 +65,7 @@ La base de datos se crea automáticamente en data/strava_activities.db la primer
 	•	Librería usada: sqlite3 (integrada en Python estándar).
 
 📂 Ubicación
-marathon_companion/data/strava_activities.db
+running_analytics/data/strava_activities.db
 
 ---
 
