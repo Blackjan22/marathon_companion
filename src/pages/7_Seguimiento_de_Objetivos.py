@@ -9,6 +9,9 @@ from openai import OpenAI
 from utils.data_processing import load_data
 from utils.formatting import format_pace
 
+model = "openai/gpt-oss-120b"
+#"openai/gpt-oss-120b", #"mistralai/Mixtral-8x7B-Instruct-v0.1",
+
 # --- Configuración de la Página y Carga de Datos ---
 st.set_page_config(layout="wide")
 st.title("🤖 Coach con Inteligencia Artificial")
@@ -42,17 +45,36 @@ except KeyError:
     client = None
 
 def get_llm_response(chat_history):
-    if not client: return None
+    if not client: 
+        st.error("❌ Cliente de API no inicializado")
+        return None
+    
     try:
+        # Debug: Mostrar info de la request (solo en desarrollo)
+        if st.checkbox("🐛 Modo Debug", key="debug_mode"):
+            st.json({
+                "model": model,
+                "messages_count": len(chat_history),
+                "last_message": chat_history[-1] if chat_history else None
+            })
+        
         chat_completion = client.chat.completions.create(
-            model="mistralai/Mixtral-8x7B-Instruct-v0.1", # <-- ¡Cambiado!
+            model=model,
             messages=chat_history,
             temperature=0.5,
             max_tokens=1500
         )
-        return chat_completion.choices[0].message.content
+        
+        response = chat_completion.choices[0].message.content
+        
+        # Debug: Verificar respuesta
+        if st.session_state.get("debug_mode", False):
+            st.text(f"Response length: {len(response) if response else 0}")
+        
+        return response
+        
     except Exception as e:
-        st.error(f"Error al contactar con la API: {e}")
+        st.error(f"❌ Error detallado al contactar con la API: {str(e)}")
         return None
 
 # --- 2. CONSTANTES DE PROMPTS (Sin cambios) ---
@@ -190,12 +212,12 @@ def update_from_pace():
         st.session_state.goal_time = seconds_to_time(total_seconds)
 
 # --- 5. INICIALIZACIÓN DEL ESTADO DE SESIÓN ---
+# --- 5. INICIALIZACIÓN DEL ESTADO DE SESIÓN ---
 if 'goal_dist' not in st.session_state:
     st.session_state.goal_dist = 21.1
 if 'goal_time' not in st.session_state:
-    st.session_state.goal_time = time(1, 34, 56) # Tiempo realista para 21.1k a 4:30/km
+    st.session_state.goal_time = time(1, 34, 56)
 if 'goal_pace' not in st.session_state:
-    ## CORRECCIÓN: Usar la nueva función para la inicialización.
     pace_seconds = time_to_seconds(st.session_state.goal_time) / st.session_state.goal_dist
     st.session_state.goal_pace = seconds_to_pace_time(pace_seconds)
 if 'input_method' not in st.session_state:
@@ -204,6 +226,11 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "last_analysis_context" not in st.session_state:
     st.session_state.last_analysis_context = ""
+# NUEVO: Contexto editable por el usuario
+if "editable_context" not in st.session_state:
+    st.session_state.editable_context = ""
+if "context_auto_generated" not in st.session_state:
+    st.session_state.context_auto_generated = True
 
 # --- 6. INTERFAZ DE USUARIO ---
 with st.container(border=True):
@@ -245,24 +272,108 @@ with st.container(border=True):
     days_left = (goal_date - datetime.now().date()).days
     st.metric(label="⏳ Días hasta el Desafío", value=f"{days_left} días" if days_left >= 0 else "¡Ya pasó!")
 
+# NUEVA SECCIÓN: Contexto Editable
+st.subheader("🔧 Contexto para el Coach IA")
+
+# Tabs para organizar mejor
+tab1, tab2 = st.tabs(["📊 Contexto Automático", "✏️ Contexto Personalizado"])
+
+with tab1:
+    st.markdown("*Este contexto se genera automáticamente basado en tus datos y objetivo:*")
+    
+    # Generar contexto automático para mostrar
+    if st.session_state.goal_dist and st.session_state.goal_time and goal_date:
+        goal_info = {
+            'name': goal_name,
+            'dist': st.session_state.goal_dist,
+            'time': st.session_state.goal_time,
+            'date': goal_date,
+            'days_left': days_left
+        }
+        auto_context = generar_contexto_experto(goal_info, activities, splits)
+        
+        # Mostrar en un expander para no ocupar mucho espacio
+        with st.expander("Ver contexto automático completo", expanded=False):
+            st.code(auto_context, language="markdown")
+        
+        # Botón para usar el contexto automático
+        if st.button("📋 Usar Contexto Automático", type="secondary"):
+            st.session_state.editable_context = auto_context
+            st.session_state.context_auto_generated = True
+            st.success("Contexto automático cargado!")
+            st.rerun()
+
+with tab2:
+    st.markdown("*Personaliza el contexto que recibirá el Coach IA:*")
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        # Área de texto editable
+        edited_context = st.text_area(
+            "Contexto personalizado:",
+            value=st.session_state.editable_context,
+            height=300,
+            help="Edita aquí la información que quieres que el Coach IA tenga en cuenta",
+            placeholder="Puedes escribir información adicional sobre tu experiencia, lesiones previas, preferencias de entrenamiento, etc."
+        )
+    
+    with col2:
+        st.markdown("**Acciones rápidas:**")
+        
+        if st.button("💾 Guardar cambios", use_container_width=True):
+            st.session_state.editable_context = edited_context
+            st.session_state.context_auto_generated = False
+            st.success("Contexto guardado!")
+            st.rerun()
+        
+        if st.button("🔄 Generar automático", use_container_width=True):
+            if st.session_state.goal_dist and st.session_state.goal_time and goal_date:
+                goal_info = {
+                    'name': goal_name,
+                    'dist': st.session_state.goal_dist,
+                    'time': st.session_state.goal_time,
+                    'date': goal_date,
+                    'days_left': days_left
+                }
+                st.session_state.editable_context = generar_contexto_experto(goal_info, activities, splits)
+                st.session_state.context_auto_generated = True
+                st.success("Contexto regenerado!")
+                st.rerun()
+        
+        if st.button("🗑️ Limpiar", use_container_width=True):
+            st.session_state.editable_context = ""
+            st.session_state.context_auto_generated = False
+            st.success("Contexto limpiado!")
+            st.rerun()
+    
+    # Mostrar estadísticas del contexto
+    if st.session_state.editable_context:
+        word_count = len(st.session_state.editable_context.split())
+        char_count = len(st.session_state.editable_context)
+        st.caption(f"📊 Estadísticas: {word_count} palabras, {char_count} caracteres")
+
+# Indicador visual del estado del contexto
+if st.session_state.editable_context:
+    context_type = "automático" if st.session_state.context_auto_generated else "personalizado"
+    st.info(f"✅ Contexto {context_type} cargado y listo para usar", icon="ℹ️")
+else:
+    st.warning("⚠️ No hay contexto definido. El Coach IA necesita contexto para funcionar correctamente.", icon="⚠️")
+
 # --- 7. LÓGICA DE BOTONES Y CHAT (Sin cambios) ---
-if st.button("Generar Análisis del Coach IA", type="primary", use_container_width=True, disabled=(not api_key)):
+if st.button("Generar Análisis del Coach IA", type="primary", use_container_width=True, 
+             disabled=(not api_key or not st.session_state.editable_context)):
+    
     st.session_state.messages = []
     st.session_state.pop('next_workouts_plan', None)
     st.session_state.pop('monthly_goal_plan', None)
 
-    goal_info = {
-        'name': goal_name,
-        'dist': st.session_state.goal_dist,
-        'time': st.session_state.goal_time,
-        'date': goal_date,
-        'days_left': days_left
-    }
-    contexto = generar_contexto_experto(goal_info, activities, splits)
-    st.session_state.last_analysis_context = contexto
+    # Usar el contexto editable en lugar de generar uno nuevo
+    contexto_final = st.session_state.editable_context
+    st.session_state.last_analysis_context = contexto_final
 
     st.session_state.messages.append({"role": "system", "content": SYSTEM_PROMPT})
-    user_request = f"{PROMPT_ANALISIS_INICIAL}\n\n--- INICIO DEL CONTEXTO ---\n{contexto}\n--- FIN DEL CONTEXTO ---"
+    user_request = f"{PROMPT_ANALISIS_INICIAL}\n\n--- INICIO DEL CONTEXTO ---\n{contexto_final}\n--- FIN DEL CONTEXTO ---"
     st.session_state.messages.append({"role": "user", "content": user_request})
 
     with st.spinner("Coach IA está analizando tu perfil completo..."):
@@ -275,10 +386,10 @@ st.subheader("Plan de Acción del Coach")
 col1, col2 = st.columns(2)
 
 def handle_action(prompt_template, session_state_key):
-    if st.session_state.last_analysis_context:
+    if st.session_state.editable_context:
         action_history = [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"Este es mi contexto completo:\n{st.session_state.last_analysis_context}"},
+            {"role": "user", "content": f"Este es mi contexto completo:\n{st.session_state.editable_context}"},
             {"role": "user", "content": prompt_template}
         ]
         spinner_message = " ".join(session_state_key.replace('_', ' ').capitalize().split()[:-1])
@@ -287,11 +398,13 @@ def handle_action(prompt_template, session_state_key):
         st.rerun()
 
 with col1:
-    if st.button("Sugerir Próximos Entrenamientos", use_container_width=True, disabled=(not st.session_state.last_analysis_context)):
+    if st.button("Sugerir Próximos Entrenamientos", use_container_width=True, 
+                 disabled=(not st.session_state.editable_context)):
         handle_action(PROMPT_PROXIMOS_ENTRENOS, 'next_workouts_plan')
 
 with col2:
-    if st.button("Plantear Objetivo Mensual", use_container_width=True, disabled=(not st.session_state.last_analysis_context)):
+    if st.button("Plantear Objetivo Mensual", use_container_width=True, 
+                 disabled=(not st.session_state.editable_context)):
         handle_action(PROMPT_OBJETIVO_MENSUAL, 'monthly_goal_plan')
 
 if 'next_workouts_plan' in st.session_state and st.session_state.next_workouts_plan:
@@ -303,20 +416,79 @@ if 'monthly_goal_plan' in st.session_state and st.session_state.monthly_goal_pla
 
 # --- CHAT ABIERTO ---
 st.subheader("Conversa con tu Coach IA")
+
+# Mostrar mensajes del chat (excluyendo el system prompt)
 chat_display_messages = [msg for msg in st.session_state.messages if msg['role'] in ['assistant', 'user']]
 
+# Mostrar el primer mensaje del asistente (análisis inicial)
 if chat_display_messages:
-    with st.chat_message("assistant"):
-        st.markdown(chat_display_messages[0]['content'])
+    # Encontrar el primer mensaje del assistant
+    first_assistant_msg = next((msg for msg in chat_display_messages if msg['role'] == 'assistant'), None)
+    if first_assistant_msg:
+        with st.chat_message("assistant"):
+            st.markdown(first_assistant_msg['content'])
 
-    for message in chat_display_messages[1:]:
+    # Mostrar el resto de mensajes (excluyendo el primer assistant message)
+    remaining_messages = []
+    first_assistant_found = False
+    for message in chat_display_messages:
+        if message['role'] == 'assistant' and not first_assistant_found:
+            first_assistant_found = True
+            continue
+        elif first_assistant_found or message['role'] == 'user':
+            remaining_messages.append(message)
+    
+    for message in remaining_messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-if prompt := st.chat_input("Haz una pregunta de seguimiento...", disabled=(not api_key or not st.session_state.messages)):
-    st.session_state.messages.append({"role": "user", "content": prompt})
+# Input del chat - Simplificar la condición
+chat_disabled = not api_key or not st.session_state.editable_context or len(st.session_state.messages) < 2
 
-    with st.spinner("Pensando..."):
-        response = get_llm_response(st.session_state.messages)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+if prompt := st.chat_input("Haz una pregunta de seguimiento...", disabled=chat_disabled):
+    # Verificar que tengamos contexto
+    if not st.session_state.editable_context:
+        st.error("❌ Necesitas definir un contexto antes de hacer preguntas.")
+        st.stop()
+    
+    # Verificar que ya se haya hecho un análisis inicial
+    if len(st.session_state.messages) < 2:
+        st.error("❌ Primero debes generar un análisis inicial.")
+        st.stop()
+    
+    # Añadir mensaje del usuario
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    
+    # Mostrar mensaje del usuario inmediatamente
+    with st.chat_message("user"):
+        st.markdown(prompt)
+    
+    # Generar respuesta del asistente
+    with st.chat_message("assistant"):
+        with st.spinner("Pensando..."):
+            try:
+                response = get_llm_response(st.session_state.messages)
+                if response and response.strip():  # Verificar que la respuesta no esté vacía
+                    st.markdown(response)
+                    st.session_state.messages.append({"role": "assistant", "content": response})
+                else:
+                    error_msg = "❌ No recibí una respuesta válida del Coach IA. Inténtalo de nuevo."
+                    st.error(error_msg)
+                    # Remover el mensaje del usuario si no hay respuesta
+                    st.session_state.messages.pop()
+            except Exception as e:
+                error_msg = f"❌ Error al obtener respuesta: {str(e)}"
+                st.error(error_msg)
+                # Remover el mensaje del usuario si hay error
+                st.session_state.messages.pop()
+    
     st.rerun()
+
+# Mostrar ayuda si el chat está deshabilitado - ESTE BLOQUE VA AQUÍ AL FINAL
+if chat_disabled:
+    if not api_key:
+        st.info("🔑 Configura tu API Key para usar el chat.", icon="ℹ️")
+    elif not st.session_state.editable_context:
+        st.info("📝 Define un contexto para empezar a chatear.", icon="ℹ️")
+    elif len(st.session_state.messages) < 2:
+        st.info("🚀 Genera un análisis inicial para empezar a chatear.", icon="ℹ️")
