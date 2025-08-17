@@ -1,6 +1,6 @@
 # my_runs_analytics.py
 import streamlit as st
-from strava_client import sync_new_activities  # Asumiendo que este archivo existe
+from strava_client import sync_new_activities
 
 # Configuración principal de la página. Solo se llama una vez.
 st.set_page_config(

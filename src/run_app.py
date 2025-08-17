@@ -10,7 +10,7 @@ def main():
     
     # Ejecutar Streamlit
     print("🚀 Iniciando Running Analytics...")
-    subprocess.run([sys.executable, "-m", "streamlit", "run", "src/my_runs_analytics.py"])
+    subprocess.run([sys.executable, "-m", "streamlit", "run", "src/My Runs Analytics.py"])
 
 if __name__ == "__main__":
     main()
