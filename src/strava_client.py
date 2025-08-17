@@ -35,6 +35,8 @@ def init_db(db_path: str):
         CREATE TABLE IF NOT EXISTS activities (
             id INTEGER PRIMARY KEY,
             name TEXT,
+            description TEXT,
+            private_note TEXT,
             start_date_local TEXT,
             distance REAL,
             moving_time INTEGER,
@@ -58,9 +60,45 @@ def init_db(db_path: str):
             FOREIGN KEY (activity_id) REFERENCES activities(id)
         )
     """)
+    
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS laps (
+            activity_id INTEGER NOT NULL,
+            lap_id INTEGER,               -- id único del lap en Strava (siempre que exista)
+            lap_index INTEGER,            -- índice del lap dentro de la actividad
+            name TEXT,                    -- p.ej. "Interval 3", "Recovery", "Warm up"
+            split INTEGER,                -- a veces Strava rellena este entero
+            start_date_local TEXT,
+            elapsed_time INTEGER,
+            moving_time INTEGER,
+            distance REAL,
+            average_speed REAL,
+            max_speed REAL,
+            start_index INTEGER,          -- índice sobre streams
+            end_index INTEGER,            -- índice sobre streams
+            total_elevation_gain REAL,
+            pace_zone INTEGER,
+            PRIMARY KEY (activity_id, lap_index),
+            FOREIGN KEY (activity_id) REFERENCES activities(id)
+        )
+    """)
+
+    # Migración "suave": añade columnas si la tabla ya existía
+    cur.execute("PRAGMA table_info(activities)")
+    cols = [row[1] for row in cur.fetchall()]
+    if "description" not in cols:
+        cur.execute("ALTER TABLE activities ADD COLUMN description TEXT")
+    if "private_note" not in cols:
+        cur.execute("ALTER TABLE activities ADD COLUMN private_note TEXT")
 
     conn.commit()
     conn.close()
+
+def fetch_laps(headers, activity_id: int):
+    url = f"https://www.strava.com/api/v3/activities/{activity_id}/laps"
+    resp = requests.get(url, headers=headers, verify=PROXY_CERT)
+    resp.raise_for_status()
+    return resp.json()  # lista de Laps
 
 def download_and_store_runs(db_path="data/strava_activities.db", max_pages=50):
     access_token = get_access_token()
@@ -97,12 +135,16 @@ def download_and_store_runs(db_path="data/strava_activities.db", max_pages=50):
             detail_resp.raise_for_status()
             detail = detail_resp.json()
 
-            # Insertar actividad
+            # Insertar actividad (incluye description y private_note)
             cur.execute("""
-                INSERT OR REPLACE INTO activities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO activities (
+                    id, name, description, private_note, start_date_local, distance, moving_time, elapsed_time, average_speed, average_heartrate, total_elevation_gain, type, sport_type
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 detail["id"],
                 detail["name"],
+                detail.get("description"),
+                detail.get("private_note"),
                 detail["start_date_local"],
                 detail["distance"],
                 detail["moving_time"],
@@ -114,10 +156,12 @@ def download_and_store_runs(db_path="data/strava_activities.db", max_pages=50):
                 detail["sport_type"]
             ))
 
-            # Insertar splits (si existen)
+            # --- SPLITS (kilómetro automático) ---
+            cur.execute("DELETE FROM splits WHERE activity_id = ?", (detail["id"],))
             for split in detail.get("splits_metric", []):
                 cur.execute("""
-                    INSERT INTO splits VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO splits (activity_id, split, distance, elapsed_time, elevation_difference, average_speed)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 """, (
                     detail["id"],
                     split["split"],
@@ -125,6 +169,33 @@ def download_and_store_runs(db_path="data/strava_activities.db", max_pages=50):
                     split["elapsed_time"],
                     split.get("elevation_difference"),
                     split["average_speed"]
+                ))
+
+            # --- LAPS (parciales/intervalos) ---
+            laps = fetch_laps(headers, detail["id"])
+            cur.execute("DELETE FROM laps WHERE activity_id = ?", (detail["id"],))
+            for lap in laps:
+                cur.execute("""
+                    INSERT INTO laps (
+                        activity_id, lap_id, lap_index, name, split, start_date_local, elapsed_time, moving_time,
+                        distance, average_speed, max_speed, start_index, end_index, total_elevation_gain, pace_zone
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    detail["id"],
+                    lap.get("id"),
+                    lap.get("lap_index"),
+                    lap.get("name"),
+                    lap.get("split"),
+                    lap.get("start_date_local"),
+                    lap.get("elapsed_time"),
+                    lap.get("moving_time"),
+                    lap.get("distance"),
+                    lap.get("average_speed"),
+                    lap.get("max_speed"),
+                    lap.get("start_index"),
+                    lap.get("end_index"),
+                    lap.get("total_elevation_gain"),
+                    lap.get("pace_zone"),
                 ))
 
             total_inserted += 1
@@ -136,6 +207,7 @@ def download_and_store_runs(db_path="data/strava_activities.db", max_pages=50):
     conn.close()
     print(f"✅ Proceso completo. Actividades almacenadas: {total_inserted}")
     
+
 def sync_new_activities(db_path="data/strava_activities.db"):
     access_token = get_access_token()
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -178,11 +250,17 @@ def sync_new_activities(db_path="data/strava_activities.db"):
             detail_resp.raise_for_status()
             detail = detail_resp.json()
 
+            # Insertar/actualizar actividad (igual que ya tienes)
             cur.execute("""
-                INSERT OR IGNORE INTO activities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO activities (
+                    id, name, description, private_note, start_date_local, distance, moving_time, elapsed_time, average_speed,
+                    average_heartrate, total_elevation_gain, type, sport_type
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 detail["id"],
                 detail["name"],
+                detail.get("description"),
+                detail.get("private_note"),
                 detail["start_date_local"],
                 detail["distance"],
                 detail["moving_time"],
@@ -194,9 +272,12 @@ def sync_new_activities(db_path="data/strava_activities.db"):
                 detail["sport_type"]
             ))
 
+            # --- SPLITS (kilómetro automático) ---
+            cur.execute("DELETE FROM splits WHERE activity_id = ?", (detail["id"],))
             for split in detail.get("splits_metric", []):
                 cur.execute("""
-                    INSERT INTO splits VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO splits (activity_id, split, distance, elapsed_time, elevation_difference, average_speed)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 """, (
                     detail["id"],
                     split["split"],
@@ -204,6 +285,33 @@ def sync_new_activities(db_path="data/strava_activities.db"):
                     split["elapsed_time"],
                     split.get("elevation_difference"),
                     split["average_speed"]
+                ))
+
+            # --- LAPS (parciales/intervalos) ---
+            laps = fetch_laps(headers, detail["id"])
+            cur.execute("DELETE FROM laps WHERE activity_id = ?", (detail["id"],))
+            for lap in laps:
+                cur.execute("""
+                    INSERT INTO laps (
+                        activity_id, lap_id, lap_index, name, split, start_date_local, elapsed_time, moving_time,
+                        distance, average_speed, max_speed, start_index, end_index, total_elevation_gain, pace_zone
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    detail["id"],
+                    lap.get("id"),
+                    lap.get("lap_index"),
+                    lap.get("name"),
+                    lap.get("split"),
+                    lap.get("start_date_local"),
+                    lap.get("elapsed_time"),
+                    lap.get("moving_time"),
+                    lap.get("distance"),
+                    lap.get("average_speed"),
+                    lap.get("max_speed"),
+                    lap.get("start_index"),
+                    lap.get("end_index"),
+                    lap.get("total_elevation_gain"),
+                    lap.get("pace_zone"),
                 ))
 
             total_new += 1
@@ -214,3 +322,66 @@ def sync_new_activities(db_path="data/strava_activities.db"):
     conn.commit()
     conn.close()
     print(f"✅ Sincronización completa. Nuevas actividades insertadas: {total_new}")
+    
+    
+def backfill_missing_laps(db_path="data/strava_activities.db", limit=None):
+    """
+    Rellena la tabla 'laps' para actividades ya presentes en 'activities' que no tengan parciales insertados.
+    Si 'limit' es un entero, procesa como máximo ese número de actividades (útil para pruebas).
+    """
+    access_token = get_access_token()
+    headers = {"Authorization": f"Bearer {access_token}"}
+    init_db(db_path)
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    sql = """
+        SELECT a.id
+        FROM activities a
+        LEFT JOIN laps l ON l.activity_id = a.id
+        WHERE l.activity_id IS NULL
+        ORDER BY a.start_date_local DESC
+    """
+    if limit is not None:
+        cur.execute(sql + " LIMIT ?", (limit,))
+    else:
+        cur.execute(sql)
+
+    rows = cur.fetchall()
+    processed = 0
+
+    for (act_id,) in rows:
+        try:
+            laps = fetch_laps(headers, act_id)
+            cur.execute("DELETE FROM laps WHERE activity_id = ?", (act_id,))
+            for lap in laps:
+                cur.execute("""
+                    INSERT INTO laps (
+                        activity_id, lap_id, lap_index, name, split, start_date_local, elapsed_time, moving_time,
+                        distance, average_speed, max_speed, start_index, end_index, total_elevation_gain, pace_zone
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    act_id,
+                    lap.get("id"),
+                    lap.get("lap_index"),
+                    lap.get("name"),
+                    lap.get("split"),
+                    lap.get("start_date_local"),
+                    lap.get("elapsed_time"),
+                    lap.get("moving_time"),
+                    lap.get("distance"),
+                    lap.get("average_speed"),
+                    lap.get("max_speed"),
+                    lap.get("start_index"),
+                    lap.get("end_index"),
+                    lap.get("total_elevation_gain"),
+                    lap.get("pace_zone"),
+                ))
+            processed += 1
+            sleep(0.2)
+        except Exception as e:
+            print(f"Error al obtener laps de {act_id}: {e}")
+
+    conn.commit()
+    conn.close()
+    print(f"Backfill de laps completado. Actividades procesadas: {processed}")
