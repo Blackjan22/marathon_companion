@@ -10,8 +10,24 @@ from utils.formatting import format_time, format_pace
 
 st.set_page_config(page_title="Histórico Completo", page_icon="📋", layout="wide", initial_sidebar_state="expanded")
 
-# Cargar datos (actividades y splits)
-activities, splits = load_data()
+# Cargar datos (actividades, splits y (opcional) laps)
+_result = load_data()
+
+# Compatibilidad hacia atrás:
+if isinstance(_result, tuple):
+    if len(_result) == 2:
+        activities, laps = _result
+        splits = pd.DataFrame()
+    elif len(_result) >= 3:
+        activities, splits, laps = _result[0], _result[1], _result[2]
+    else:
+        activities = _result[0]
+        splits = pd.DataFrame()
+        laps = pd.DataFrame()
+else:
+    activities = _result
+    splits = pd.DataFrame()
+    laps = pd.DataFrame()
 
 st.title("📋 Histórico Completo de Actividades")
 
@@ -91,13 +107,13 @@ st.dataframe(
 )
 
 # =====================
-#   ANÁLISIS DE SPLITS
+#   ANÁLISIS DE LAPS
 # =====================
 st.divider()
-st.subheader("🏃‍♂️ Análisis de Splits")
+st.subheader("⏱️ Análisis de Laps")
 
-if splits.empty:
-    st.warning("No hay datos de splits disponibles en tu base de datos.")
+if laps.empty:
+    st.warning("No hay datos de laps disponibles en tu base de datos.")
     st.stop()
 
 # Limitar selección a actividades filtradas arriba
@@ -115,12 +131,12 @@ activity_options['display'] = activity_options.apply(
     axis=1
 )
 selected_activity_id = st.selectbox(
-    "Elige una carrera para analizar sus splits:",
+    "Elige una carrera para analizar sus laps:",
     options=activity_options['id'],
     format_func=lambda x: activity_options[activity_options['id'] == x]['display'].iloc[0]
 )
 
-activity_splits = splits[splits['activity_id'] == selected_activity_id].copy()
+activity_laps = laps[laps['activity_id'] == selected_activity_id].copy()
 activity_info = activities[activities['id'] == selected_activity_id].iloc[0]
 
 # Métricas principales (incluye desnivel total)
@@ -143,20 +159,42 @@ if comentarios:
     st.markdown(f"**Notas:** {comentarios}")
 
 # Gráficos y detalle
-if not activity_splits.empty:
-    
-    st.subheader("Ritmo y Desnivel por Split")
+if not activity_laps.empty:
 
-    # Series base
-    x = pd.to_numeric(activity_splits['split'], errors='coerce')
-    pace = activity_splits['pace_min_km']
-    has_elev = 'elevation_difference' in activity_splits.columns
-    elev = activity_splits['elevation_difference'].fillna(0) if has_elev else None
+    st.subheader("Ritmo y Desnivel por Lap")
 
-    # Figura con eje secundario
+    # ----- Preparar series -----
+    def _get_lap_no(df: pd.DataFrame) -> pd.Series:
+        if 'lap_index' in df.columns:
+            return pd.to_numeric(df['lap_index'], errors='coerce')
+        elif 'split' in df.columns:
+            return pd.to_numeric(df['split'], errors='coerce')
+        else:
+            return pd.Series(range(1, len(df) + 1), index=df.index)
+
+    x = _get_lap_no(activity_laps)
+
+    dist_m = pd.to_numeric(activity_laps.get('distance', pd.Series(index=activity_laps.index)), errors='coerce')
+    mov_s  = pd.to_numeric(activity_laps.get('moving_time', pd.Series(index=activity_laps.index)), errors='coerce')
+    avg_v  = pd.to_numeric(activity_laps.get('average_speed', pd.Series(index=activity_laps.index)), errors='coerce')
+
+    def _pace_min_km(distance_m, moving_time_s, avg_speed_mps):
+        # Prioriza velocidad media si está disponible; si no, calcula por distancia/tiempo.
+        if pd.notnull(avg_speed_mps) and avg_speed_mps > 0:
+            return 16.6666667 / float(avg_speed_mps)  # (1000/60) / m/s
+        if pd.notnull(distance_m) and pd.notnull(moving_time_s) and distance_m > 0 and moving_time_s > 0:
+            return (float(moving_time_s) / float(distance_m)) * (1000.0 / 60.0)
+        return None
+
+    pace = [ _pace_min_km(dm, mt, spd) for dm, mt, spd in zip(dist_m, mov_s, avg_v) ]
+
+    has_elev = 'total_elevation_gain' in activity_laps.columns
+    elev = activity_laps['total_elevation_gain'].fillna(0) if has_elev else None
+
+    # ----- Figura con eje secundario -----
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-    # PERFIL EN ÁREA: Desnivel (Y izquierda)
+    # PERFIL EN ÁREA: Ganancia de elevación (Y izquierda)
     if has_elev:
         fig.add_trace(
             go.Scatter(
@@ -164,10 +202,10 @@ if not activity_splits.empty:
                 y=elev,
                 mode="lines",
                 fill="tozeroy",
-                name="Desnivel (m)",
-                line=dict(width=0),        # solo área, sin contorno marcado
+                name="Ganancia elev. (m)",
+                line=dict(width=0),        # solo área
                 opacity=0.45,
-                hovertemplate="Split: %{x}<br>Desnivel: %{y:.0f} m<extra></extra>",
+                hovertemplate="Lap: %{x}<br>Desnivel: %{y:.0f} m<extra></extra>",
                 connectgaps=False
             ),
             secondary_y=False
@@ -182,37 +220,37 @@ if not activity_splits.empty:
             name="Ritmo (min/km)",
             line=dict(width=2, dash="dot"),
             marker=dict(size=6),
-            hovertemplate="Split: %{x}<br>Ritmo: %{text}<extra></extra>",
-            text=pace.apply(format_pace),
+            hovertemplate="Lap: %{x}<br>Ritmo: %{text}<extra></extra>",
+            text=[format_pace(p) if p is not None else "N/A" for p in pace],
             connectgaps=False
         ),
         secondary_y=True
     )
 
-    # Línea media de ritmo (sobre y2)
-    avg_pace = float(pace.mean())
-    fig.add_shape(
-        type="line",
-        x0=float(x.min()), x1=float(x.max()),
-        y0=avg_pace, y1=avg_pace,
-        xref="x", yref="y2",
-        line=dict(dash="dash", width=1.5)
-    )
-    fig.add_annotation(
-        x=1.0, xref="paper",
-        y=avg_pace, yref="y2",
-        text=f"Ritmo medio: {format_pace(avg_pace)}",
-        showarrow=False, xanchor="left", yanchor="bottom", xshift=8
-    )
+    # Línea media de ritmo (sobre y2) si hay datos válidos
+    pace_series = pd.Series([p for p in pace if p is not None])
+    if not pace_series.empty:
+        avg_pace = float(pace_series.mean())
+        fig.add_shape(
+            type="line",
+            x0=float(x.min()), x1=float(x.max()),
+            y0=avg_pace, y1=avg_pace,
+            xref="x", yref="y2",
+            line=dict(dash="dash", width=1.5)
+        )
+        fig.add_annotation(
+            x=1.0, xref="paper",
+            y=avg_pace, yref="y2",
+            text=f"Ritmo medio: {format_pace(avg_pace)}",
+            showarrow=False, xanchor="left", yanchor="bottom", xshift=8
+        )
+        y2_min, y2_max = float(pace_series.min()), float(pace_series.max())
+    else:
+        # Valores por defecto para evitar errores si todo es N/A
+        y2_min, y2_max = 4.0, 8.0  # rango razonable en min/km
 
-    # Ejes y layout (evitamos solapes visuales)
-    y2_min, y2_max = float(pace.min()), float(pace.max())
     pad = 0.15
-    fig.update_xaxes(
-        title_text="Split (km)",
-        type="linear",           # evita wrap de categorías
-        dtick=1
-    )
+    fig.update_xaxes(title_text="Lap #", type="linear", dtick=1)
     fig.update_yaxes(
         title_text="Desnivel (m)",
         secondary_y=False,
@@ -227,7 +265,6 @@ if not activity_splits.empty:
     )
 
     fig.update_layout(
-        title="Ritmo y Desnivel por Split",
         hovermode="x unified",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
         margin=dict(l=10, r=10, t=60, b=40)
@@ -235,22 +272,41 @@ if not activity_splits.empty:
 
     st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("Detalle de Splits")
-    
-    splits_display = activity_splits.copy()
-    splits_display['Ritmo'] = splits_display['pace_min_km'].apply(format_pace)
-    splits_display['Tiempo'] = splits_display['elapsed_time'].apply(format_time)
-    splits_display['Distancia (m)'] = splits_display['distance'].round(0)
-    if 'elevation_difference' in splits_display.columns:
-        splits_display['Desnivel (m)'] = splits_display['elevation_difference'].fillna(0).round(0).astype(int)
-        cols = ['split', 'Distancia (m)', 'Tiempo', 'Ritmo', 'Desnivel (m)']
+    # ----- Tabla de detalle de laps -----
+    st.subheader("Detalle de Laps")
+
+    laps_display = activity_laps.copy()
+    laps_display['Ritmo'] = [format_pace(p) if p is not None else "N/A" for p in pace]
+
+    if 'moving_time' in laps_display.columns:
+        laps_display['Tiempo (mov)'] = laps_display['moving_time'].apply(format_time)
+    if 'elapsed_time' in laps_display.columns:
+        laps_display['Tiempo (total)'] = laps_display['elapsed_time'].apply(format_time)
+    if 'distance' in laps_display.columns:
+        laps_display['Distancia (m)'] = laps_display['distance'].round(0)
+    if 'total_elevation_gain' in laps_display.columns:
+        laps_display['Desnivel (m)'] = laps_display['total_elevation_gain'].fillna(0).round(0).astype(int)
+    if 'average_heartrate' in laps_display.columns:
+        laps_display['FC Prom.'] = laps_display['average_heartrate'].fillna(0).round(0).astype(int).astype(str).replace('0', 'N/A')
+    if 'average_cadence' in laps_display.columns:
+        # Algunas APIs devuelven cadencia en pasos/min (running) o rpm (ciclismo)
+        laps_display['Cadencia'] = laps_display['average_cadence'].round(0).astype('Int64').astype(str)
+
+    # Columna de índice de lap
+    if 'lap_index' in laps_display.columns:
+        idx_col = 'lap_index'
+    elif 'split' in laps_display.columns:
+        idx_col = 'split'
     else:
-        cols = ['split', 'Distancia (m)', 'Tiempo', 'Ritmo']
+        idx_col = '_lap_tmp_index'
+        laps_display[idx_col] = range(1, len(laps_display) + 1)
+
+    cols = [idx_col] + [c for c in ['Distancia (m)', 'Tiempo (mov)', 'Tiempo (total)', 'Ritmo', 'Desnivel (m)', 'FC Prom.', 'Cadencia'] if c in laps_display.columns]
 
     st.dataframe(
-        splits_display[cols].rename(columns={'split': 'Split (km)'}),
+        laps_display[cols].rename(columns={idx_col: 'Lap #'}),
         use_container_width=True,
         hide_index=True
     )
 else:
-    st.info("Esta actividad no tiene datos de splits disponibles.")
+    st.info("Esta actividad no tiene datos de laps disponibles.")

@@ -38,13 +38,8 @@ st.markdown("""
 Esta aplicación te permite visualizar y analizar todas las carreras que has sincronizado desde Strava.
 
 **Características principales:**
-- **Dashboard General:** Un resumen de tus métricas clave.
-- **Análisis de Rendimiento:** Estudia la evolución de tu ritmo, frecuencia cardíaca y más.
-- **Análisis de Ritmos:** Profundiza en tus zonas de entrenamiento.
-- **Tendencias Temporales:** Descubre tus patrones de entrenamiento semanales y mensuales.
-- **Análisis de Splits:** Revisa el ritmo de cada kilómetro en carreras específicas.
-- **Histórico Completo:** Una tabla con todas tus actividades para buscar y filtrar.
-- **Coach:** Un entrenador personal basado en IA.
+- **Dashboard General:** Un resumen de tus métricas clave y análisis de progreso.
+- **Histórico Completo:** Una tabla con todas tus actividades para buscar, filtrar y analizar en detalle.
 
 ¡Usa el menú de la izquierda para navegar!
 """)

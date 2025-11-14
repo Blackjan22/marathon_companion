@@ -214,7 +214,6 @@ def sync_new_activities(db_path="data/strava_activities.db"):
     init_db(db_path)
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
-
     # Obtener fecha de última actividad
     cur.execute("SELECT MAX(start_date_local) FROM activities")
     result = cur.fetchone()

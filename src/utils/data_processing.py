@@ -16,9 +16,9 @@ def load_data():
         activities_query = "SELECT * FROM activities WHERE type = 'Run' ORDER BY start_date_local DESC"
         activities = pd.read_sql_query(activities_query, conn)
         
-        # Cargar splits
-        splits_query = "SELECT * FROM splits"
-        splits = pd.read_sql_query(splits_query, conn)
+        # CAMBIO: Cargar laps en lugar de splits
+        laps_query = "SELECT * FROM laps"
+        laps = pd.read_sql_query(laps_query, conn)
         
         conn.close()
         
@@ -32,10 +32,23 @@ def load_data():
         activities['day_of_week'] = activities['start_date_local'].dt.day_name()
         activities['hour'] = activities['start_date_local'].dt.hour
         
-        if not splits.empty:
-            splits['pace_min_km'] = (splits['elapsed_time'] / 60) / (splits['distance'] / 1000)
+        # CAMBIO: Procesar laps en lugar de splits
+        if not laps.empty:
+            # Para laps necesitamos calcular el ritmo de manera diferente
+            # porque la distancia está en metros y el tiempo en segundos
+            laps['distance_km'] = laps['distance'] / 1000
+            laps['moving_time_min'] = laps['moving_time'] / 60
+            
+            # Calcular ritmo (min/km) solo para laps con distancia > 0
+            laps['pace_min_km'] = None
+            mask = (laps['distance'] > 0) & (laps['moving_time'] > 0)
+            laps.loc[mask, 'pace_min_km'] = (laps.loc[mask, 'moving_time'] / 60) / (laps.loc[mask, 'distance'] / 1000)
+            
+            # También podemos usar average_speed si está disponible
+            speed_mask = laps['average_speed'] > 0
+            laps.loc[speed_mask, 'pace_from_speed'] = (1000 / laps.loc[speed_mask, 'average_speed']) / 60
         
-        return activities, splits
+        return activities, laps  # CAMBIO: devolver laps en lugar de splits
     
     except Exception as e:
         st.error(f"Error cargando datos: {e}")
