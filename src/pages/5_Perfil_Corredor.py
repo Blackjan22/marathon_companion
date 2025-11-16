@@ -1,12 +1,13 @@
 # pages/5_Perfil_Corredor.py
 import streamlit as st
-import sqlite3
 import sys
 import os
 from datetime import datetime
 
 # Añadir el directorio src al path para importar módulos
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from utils.db_config import get_connection
 
 st.set_page_config(layout="wide")
 st.title("👤 Perfil del Corredor")
@@ -19,7 +20,7 @@ Todos estos datos son opcionales, pero cuanto más completo esté tu perfil, mej
 
 def get_current_profile():
     """Obtiene el perfil actual de la base de datos."""
-    conn = sqlite3.connect('data/strava_activities.db')
+    conn = get_connection()
     cur = conn.cursor()
     cur.execute("SELECT * FROM runner_profile ORDER BY updated_at DESC LIMIT 1")
     row = cur.fetchone()
@@ -40,7 +41,7 @@ def get_current_profile():
 
 def save_profile(profile_data):
     """Guarda o actualiza el perfil en la base de datos."""
-    conn = sqlite3.connect('data/strava_activities.db')
+    conn = get_connection()
     cur = conn.cursor()
 
     # Verificar si ya existe un perfil

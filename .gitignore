@@ -4,7 +4,10 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 data/
-.streamlit/
 notebooks/
 .claude/
 manual_info/
+
+# Streamlit secrets (but allow example file)
+.streamlit/secrets.toml
+.streamlit/config.toml

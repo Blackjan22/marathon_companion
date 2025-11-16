@@ -1,9 +1,13 @@
 from datetime import datetime
 import os
 import requests
-import sqlite3
 from dotenv import load_dotenv
 from time import sleep
+import sys
+
+# Añadir directorio actual al path para imports
+sys.path.insert(0, os.path.dirname(__file__))
+from utils.db_config import get_connection
 
 load_dotenv(override=True)
 
@@ -27,8 +31,7 @@ def get_access_token():
 
 
 def init_db(db_path: str):
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     cur = conn.cursor()
 
     cur.execute("""
@@ -184,7 +187,7 @@ def download_and_store_runs(db_path="data/strava_activities.db", max_pages=50):
     headers = {"Authorization": f"Bearer {access_token}"}
 
     init_db(db_path)
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     cur = conn.cursor()
 
     page = 1
@@ -291,7 +294,7 @@ def sync_new_activities(db_path="data/strava_activities.db"):
     access_token = get_access_token()
     headers = {"Authorization": f"Bearer {access_token}"}
     init_db(db_path)
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     cur = conn.cursor()
     # Obtener fecha de última actividad
     cur.execute("SELECT MAX(start_date_local) FROM activities")
@@ -410,7 +413,7 @@ def backfill_missing_laps(db_path="data/strava_activities.db", limit=None):
     access_token = get_access_token()
     headers = {"Authorization": f"Bearer {access_token}"}
     init_db(db_path)
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     cur = conn.cursor()
 
     sql = """

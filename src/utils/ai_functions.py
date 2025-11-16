@@ -4,10 +4,10 @@ Funciones que el modelo Gemini puede llamar para acceder a datos y realizar acci
 Estas funciones están diseñadas para ser usadas con Gemini Function Calling.
 """
 
-import sqlite3
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, List
+from .db_config import get_connection
 
 
 def get_recent_activities(days: int = 7) -> dict:
@@ -20,7 +20,7 @@ def get_recent_activities(days: int = 7) -> dict:
     Returns:
         Un diccionario con las actividades recientes y sus estadísticas
     """
-    conn = sqlite3.connect('data/strava_activities.db')
+    conn = get_connection()
     cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
 
     query = """
@@ -66,7 +66,7 @@ def get_weekly_stats(weeks: int = 4) -> dict:
     Returns:
         Diccionario con estadísticas semanales
     """
-    conn = sqlite3.connect('data/strava_activities.db')
+    conn = get_connection()
     cutoff_date = (datetime.now() - timedelta(weeks=weeks)).isoformat()
 
     query = """
@@ -113,7 +113,7 @@ def get_activity_details(activity_id) -> dict:
         except ValueError:
             return {"error": f"ID inválido: {activity_id}"}
 
-    conn = sqlite3.connect('data/strava_activities.db')
+    conn = get_connection()
 
     # Información de la actividad
     activity_query = """
@@ -168,7 +168,7 @@ def get_current_plan() -> dict:
     Returns:
         Diccionario con el plan actual y sus entrenamientos planificados
     """
-    conn = sqlite3.connect('data/strava_activities.db')
+    conn = get_connection()
 
     # Plan activo
     plan_query = """
@@ -227,7 +227,7 @@ def create_training_plan(week_start_date: str, workouts: List[Dict], goal: str =
     Returns:
         Diccionario con el plan creado y sus entrenamientos
     """
-    conn = sqlite3.connect('data/strava_activities.db')
+    conn = get_connection()
     cur = conn.cursor()
 
     # IMPORTANTE: Desactivar todos los planes activos anteriores
@@ -297,7 +297,7 @@ def update_workout(workout_id, changes: Dict) -> dict:
         except ValueError:
             return {"error": f"ID inválido: {workout_id}"}
 
-    conn = sqlite3.connect('data/strava_activities.db')
+    conn = get_connection()
     cur = conn.cursor()
 
     # Construir query dinámicamente basándose en los campos a actualizar
@@ -346,7 +346,7 @@ def delete_workout(workout_id) -> dict:
         except ValueError:
             return {"success": False, "error": f"ID inválido: {workout_id}"}
 
-    conn = sqlite3.connect('data/strava_activities.db')
+    conn = get_connection()
     cur = conn.cursor()
 
     # Verificar que el workout existe
@@ -378,7 +378,7 @@ def get_runner_profile() -> dict:
     Returns:
         Diccionario con toda la información del perfil del corredor
     """
-    conn = sqlite3.connect('data/strava_activities.db')
+    conn = get_connection()
 
     query = """
         SELECT * FROM runner_profile
@@ -415,7 +415,7 @@ def analyze_performance_trends(weeks: int = 4) -> dict:
     Returns:
         Diccionario con análisis de tendencias y recomendaciones
     """
-    conn = sqlite3.connect('data/strava_activities.db')
+    conn = get_connection()
     cutoff_date = (datetime.now() - timedelta(weeks=weeks)).isoformat()
 
     # Obtener actividades recientes con FC
@@ -593,7 +593,7 @@ def analyze_training_load_advanced() -> dict:
     Returns:
         Diccionario con análisis detallado de carga y recomendaciones
     """
-    conn = sqlite3.connect('data/strava_activities.db')
+    conn = get_connection()
 
     # Últimas 6 semanas de datos
     cutoff_date = (datetime.now() - timedelta(weeks=6)).isoformat()
@@ -714,7 +714,7 @@ def add_workout_to_current_plan(date: str, workout_type: str, distance_km: float
     Returns:
         Diccionario con el resultado de la operación
     """
-    conn = sqlite3.connect('data/strava_activities.db')
+    conn = get_connection()
     cur = conn.cursor()
 
     # Obtener el plan activo

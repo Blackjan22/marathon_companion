@@ -159,7 +159,225 @@ GEMINI_API_KEY=tu_gemini_api_key
 python src/run_app.py
 ```
 
-La aplicación se abrirá automáticamente en tu navegador en `http://localhost:8501`.  
+La aplicación se abrirá automáticamente en tu navegador en `http://localhost:8501`.
+
+---
+
+## ☁️ Despliegue en Streamlit Cloud (Acceso móvil)
+
+La aplicación puede desplegarse gratuitamente en Streamlit Cloud para acceder desde cualquier dispositivo.
+
+### Arquitectura de despliegue
+
+- **Local**: SQLite (`data/strava_activities.db`)
+- **Cloud**: PostgreSQL (Supabase) - base de datos persistente gratuita
+
+La aplicación detecta automáticamente el entorno y usa la base de datos apropiada.
+
+### Pasos para desplegar
+
+#### 1. Crear base de datos en Supabase (5 min)
+
+1. Ve a [https://supabase.com](https://supabase.com) y crea una cuenta gratuita
+2. Crea un nuevo proyecto:
+   - Nombre: `running-analytics` (o el que prefieras)
+   - Contraseña: **guárdala bien**, la necesitarás después
+   - Región: Europe West (Frankfurt) - más cercana a España
+3. Espera a que se cree el proyecto (~2 minutos)
+4. Ve a **Settings > Database**
+5. En **Connection String**, copia la **URI** en modo "Session" (no "Transaction")
+   - Formato: `postgresql://postgres.xxxxx:[YOUR-PASSWORD]@aws-0-eu-central-1.pooler.supabase.com:6543/postgres`
+   - Reemplaza `[YOUR-PASSWORD]` con tu contraseña real
+
+#### 2. Inicializar esquema de base de datos (5 min)
+
+Supabase necesita que creemos las tablas manualmente la primera vez:
+
+1. En Supabase, ve a **SQL Editor**
+2. Ejecuta este script para crear todas las tablas:
+
+```sql
+CREATE TABLE IF NOT EXISTS activities (
+    id BIGINT PRIMARY KEY,
+    name TEXT,
+    description TEXT,
+    private_note TEXT,
+    start_date_local TEXT,
+    distance REAL,
+    moving_time INTEGER,
+    elapsed_time INTEGER,
+    average_speed REAL,
+    average_heartrate REAL,
+    total_elevation_gain REAL,
+    type TEXT,
+    sport_type TEXT
+);
+
+CREATE TABLE IF NOT EXISTS splits (
+    activity_id BIGINT,
+    split INTEGER,
+    distance REAL,
+    elapsed_time INTEGER,
+    elevation_difference REAL,
+    average_speed REAL,
+    FOREIGN KEY (activity_id) REFERENCES activities(id)
+);
+
+CREATE TABLE IF NOT EXISTS laps (
+    activity_id BIGINT NOT NULL,
+    lap_id BIGINT,
+    lap_index INTEGER,
+    name TEXT,
+    split INTEGER,
+    start_date_local TEXT,
+    elapsed_time INTEGER,
+    moving_time INTEGER,
+    distance REAL,
+    average_speed REAL,
+    max_speed REAL,
+    start_index INTEGER,
+    end_index INTEGER,
+    total_elevation_gain REAL,
+    pace_zone INTEGER,
+    PRIMARY KEY (activity_id, lap_index),
+    FOREIGN KEY (activity_id) REFERENCES activities(id)
+);
+
+CREATE TABLE IF NOT EXISTS training_plans (
+    id SERIAL PRIMARY KEY,
+    week_start_date TEXT NOT NULL,
+    week_number INTEGER,
+    goal TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    status TEXT DEFAULT 'active'
+);
+
+CREATE TABLE IF NOT EXISTS planned_workouts (
+    id SERIAL PRIMARY KEY,
+    plan_id INTEGER,
+    date TEXT NOT NULL,
+    workout_type TEXT,
+    distance_km REAL,
+    description TEXT,
+    pace_objective TEXT,
+    notes TEXT,
+    status TEXT DEFAULT 'pending',
+    linked_activity_id BIGINT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (plan_id) REFERENCES training_plans(id),
+    FOREIGN KEY (linked_activity_id) REFERENCES activities(id)
+);
+
+CREATE TABLE IF NOT EXISTS workout_feedback (
+    id SERIAL PRIMARY KEY,
+    planned_workout_id INTEGER,
+    activity_id BIGINT,
+    sensations TEXT,
+    completed_as_planned INTEGER DEFAULT 1,
+    notes TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (planned_workout_id) REFERENCES planned_workouts(id),
+    FOREIGN KEY (activity_id) REFERENCES activities(id)
+);
+
+CREATE TABLE IF NOT EXISTS chat_history (
+    id SERIAL PRIMARY KEY,
+    role TEXT NOT NULL,
+    content TEXT,
+    timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+    context_summary TEXT
+);
+
+CREATE TABLE IF NOT EXISTS runner_profile (
+    id SERIAL PRIMARY KEY,
+    name TEXT,
+    height_cm REAL,
+    weight_kg REAL,
+    age INTEGER,
+    vo2max_estimate REAL,
+    threshold_pace TEXT,
+    easy_pace_min TEXT,
+    easy_pace_max TEXT,
+    training_philosophy TEXT,
+    current_goal TEXT,
+    goal_race_date TEXT,
+    goal_race_distance TEXT,
+    pr_5k TEXT,
+    pr_10k TEXT,
+    pr_half TEXT,
+    pr_marathon TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+3. Haz clic en **Run** para ejecutar el script
+
+#### 3. Desplegar en Streamlit Cloud (10 min)
+
+1. **Sube tu código a GitHub** (si no lo has hecho):
+   ```bash
+   git add .
+   git commit -m "Preparar para deploy en Streamlit Cloud"
+   git push origin main
+   ```
+
+2. **Ve a [https://share.streamlit.io](https://share.streamlit.io)** e inicia sesión con GitHub
+
+3. **Crea una nueva app**:
+   - Repository: `tu-usuario/marathon_companion`
+   - Branch: `main`
+   - Main file path: `src/My Runs Analytics.py`
+
+4. **Configura los secrets**:
+   - Haz clic en **Advanced settings**
+   - En **Secrets**, pega esto (con tus valores reales):
+
+```toml
+[database]
+url = "postgresql://postgres.xxxxx:TU_PASSWORD_REAL@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
+
+STRAVA_CLIENT_ID = "tu_client_id"
+STRAVA_CLIENT_SECRET = "tu_client_secret"
+STRAVA_REFRESH_TOKEN = "tu_refresh_token"
+GEMINI_API_KEY = "tu_gemini_api_key"
+```
+
+5. Haz clic en **Deploy**
+
+6. Espera ~3 minutos a que se despliegue
+
+#### 4. Sincronizar datos inicialmente
+
+**IMPORTANTE**: La primera vez que uses la app en Streamlit Cloud, la base de datos estará vacía. Debes sincronizar tus actividades desde Strava:
+
+1. Abre tu app en Streamlit Cloud
+2. Usa el botón **"🔄 Refrescar actividades"** en el sidebar
+3. Espera a que descargue todas tus actividades (puede tardar varios minutos la primera vez)
+4. Una vez completado, todos tus datos estarán en Supabase y podrás usar la app normalmente
+
+### Notas importantes
+
+- **Plan gratuito de Streamlit Cloud**: 2 apps públicas, recursos compartidos (suficiente para uso personal)
+- **Plan gratuito de Supabase**: 500MB de base de datos, 2GB de transferencia/mes (más que suficiente para running analytics)
+- **Persistencia de datos**: Los datos están en Supabase, **no** en Streamlit Cloud. Aunque reinicies la app, tus datos permanecen
+- **Sincronización**: Debes sincronizar manualmente desde la app cuando tengas nuevas actividades en Strava
+- **Acceso móvil**: Una vez desplegado, accede desde cualquier dispositivo con la URL de Streamlit Cloud
+
+### Solución de problemas
+
+**Error de conexión a la base de datos:**
+- Verifica que la URL de Supabase sea correcta y tenga la contraseña real (no `[YOUR-PASSWORD]`)
+- Comprueba que el esquema de base de datos se haya creado correctamente
+
+**La app no se despliega:**
+- Verifica que `requirements.txt` incluya `psycopg2-binary`
+- Comprueba que el path al archivo principal sea correcto: `src/My Runs Analytics.py`
+
+**No aparecen actividades:**
+- Usa el botón "🔄 Refrescar actividades" la primera vez
+- Verifica que tus credenciales de Strava sean correctas
 
 ---
 

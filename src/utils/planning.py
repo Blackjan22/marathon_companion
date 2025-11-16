@@ -1,13 +1,13 @@
 # utils/planning.py
-import sqlite3
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List
+from .db_config import get_connection
 
 
 def get_current_plan(db_path='data/strava_activities.db') -> Optional[Dict]:
     """Obtiene el plan de entrenamiento activo actual."""
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     query = """
         SELECT * FROM training_plans
         WHERE status = 'active'
@@ -24,7 +24,7 @@ def get_current_plan(db_path='data/strava_activities.db') -> Optional[Dict]:
 
 def get_planned_workouts(plan_id: int, db_path='data/strava_activities.db') -> pd.DataFrame:
     """Obtiene todos los entrenamientos planificados de un plan."""
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     query = """
         SELECT pw.*, a.name as activity_name, a.distance/1000 as activity_distance_km,
                a.moving_time, a.start_date_local
@@ -53,7 +53,7 @@ def get_upcoming_workouts(weeks=4, include_past_weeks=0, start_date=None, end_da
     Returns:
         DataFrame con los entrenamientos del plan activo en el rango de fechas
     """
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
 
     # Calcular fechas del rango
     if start_date is None:
@@ -80,7 +80,7 @@ def get_upcoming_workouts(weeks=4, include_past_weeks=0, start_date=None, end_da
 def create_training_plan(week_start_date: str, goal: str = None,
                         notes: str = None, db_path='data/strava_activities.db') -> int:
     """Crea un nuevo plan de entrenamiento."""
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     cur = conn.cursor()
 
     # Calcular número de semana
@@ -103,7 +103,7 @@ def add_planned_workout(plan_id: int, date: str, workout_type: str,
                        pace_objective: str = None, notes: str = None,
                        db_path='data/strava_activities.db') -> int:
     """Añade un entrenamiento planificado a un plan."""
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     cur = conn.cursor()
 
     cur.execute("""
@@ -121,7 +121,7 @@ def add_planned_workout(plan_id: int, date: str, workout_type: str,
 def link_activity_to_workout(workout_id: int, activity_id: int,
                              db_path='data/strava_activities.db'):
     """Vincula una actividad de Strava con un entrenamiento planificado."""
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     cur = conn.cursor()
 
     cur.execute("""
@@ -138,7 +138,7 @@ def link_activity_to_workout(workout_id: int, activity_id: int,
 
 def get_unlinked_activities(days=7, db_path='data/strava_activities.db') -> pd.DataFrame:
     """Obtiene actividades recientes no vinculadas a ningún plan."""
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     cutoff_date = (datetime.now().date() - timedelta(days=days)).isoformat()
 
     query = """
@@ -160,7 +160,7 @@ def get_unlinked_activities(days=7, db_path='data/strava_activities.db') -> pd.D
 
 def update_workout_status(workout_id: int, status: str, db_path='data/strava_activities.db'):
     """Actualiza el estado de un entrenamiento planificado."""
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     cur = conn.cursor()
 
     cur.execute("""
@@ -175,7 +175,7 @@ def update_workout_status(workout_id: int, status: str, db_path='data/strava_act
 
 def reset_workout_to_pending(workout_id: int, db_path='data/strava_activities.db'):
     """Desmarca un entrenamiento, volviéndolo a estado 'pending' y desvinculando la actividad."""
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     cur = conn.cursor()
 
     cur.execute("""
@@ -190,7 +190,7 @@ def reset_workout_to_pending(workout_id: int, db_path='data/strava_activities.db
 
 def close_training_plan(plan_id: int, db_path='data/strava_activities.db'):
     """Marca un plan de entrenamiento como completado."""
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     cur = conn.cursor()
 
     cur.execute("""
@@ -205,7 +205,7 @@ def close_training_plan(plan_id: int, db_path='data/strava_activities.db'):
 
 def delete_workout(workout_id: int, db_path='data/strava_activities.db'):
     """Elimina un entrenamiento planificado del plan."""
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     cur = conn.cursor()
 
     # Primero eliminar feedback asociado si existe
@@ -229,7 +229,7 @@ def update_workout(workout_id: int, date: str = None, workout_type: str = None,
                    pace_objective: str = None, notes: str = None,
                    db_path='data/strava_activities.db'):
     """Actualiza los campos de un entrenamiento planificado."""
-    conn = sqlite3.connect(db_path)
+    conn = get_connection()
     cur = conn.cursor()
 
     # Construir query dinámicamente según los campos proporcionados

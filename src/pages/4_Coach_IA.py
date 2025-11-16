@@ -2,7 +2,6 @@
 import streamlit as st
 import os
 import sys
-import sqlite3
 from datetime import datetime
 
 # Configurar certificado SSL ANTES de importar genai (para VPN corporativa)
@@ -70,6 +69,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from utils import ai_functions
 from utils import ai_context
 from utils import gemini_tools
+from utils.db_config import get_connection
 
 st.set_page_config(layout="wide")
 st.title("🤖 Coach con Inteligencia Artificial")
@@ -257,7 +257,7 @@ Usa tus funciones de análisis proactivamente para dar recomendaciones basadas e
 
 def save_chat_to_db(role: str, content: str):
     """Guarda un mensaje en el historial de chat en la BD."""
-    conn = sqlite3.connect('data/strava_activities.db')
+    conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO chat_history (role, content, timestamp)
@@ -269,7 +269,7 @@ def save_chat_to_db(role: str, content: str):
 
 def load_chat_history(limit: int = 50):
     """Carga el historial de chat desde la BD."""
-    conn = sqlite3.connect('data/strava_activities.db')
+    conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
         SELECT role, content, timestamp

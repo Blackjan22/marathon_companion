@@ -4,11 +4,11 @@ Sistema de gestión de contexto y memoria para el chatbot de IA.
 Proporciona contexto relevante automáticamente al iniciar conversaciones.
 """
 
-import sqlite3
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, List
 from . import ai_functions
+from .db_config import get_connection
 
 
 def generate_initial_context() -> str:
@@ -147,7 +147,7 @@ def get_recent_private_notes_summary(days: int = 7) -> str:
     Returns:
         String con resumen de las notas privadas o None si no hay
     """
-    conn = sqlite3.connect('data/strava_activities.db')
+    conn = get_connection()
     cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
 
     query = """
@@ -251,7 +251,7 @@ def save_context_snapshot(summary: str):
     Args:
         summary: Resumen del contexto a guardar
     """
-    conn = sqlite3.connect('data/strava_activities.db')
+    conn = get_connection()
     cur = conn.cursor()
 
     cur.execute("""
