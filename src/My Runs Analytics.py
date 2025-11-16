@@ -1,6 +1,7 @@
 # my_runs_analytics.py
 import streamlit as st
 from strava_client import sync_new_activities
+from utils.db_config import get_database_url, is_postgres
 
 # Configuración principal de la página. Solo se llama una vez.
 st.set_page_config(
@@ -9,6 +10,15 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# DEBUG: Mostrar info de base de datos
+db_url = get_database_url()
+if db_url:
+    st.sidebar.success(f"✅ PostgreSQL detectado ({len(db_url)} chars)")
+    st.sidebar.caption(f"Host: {db_url.split('@')[1].split(':')[0] if '@' in db_url else 'unknown'}")
+else:
+    st.sidebar.warning("⚠️ Usando SQLite local")
+st.sidebar.caption(f"is_postgres: {is_postgres()}")
 
 # --- BARRA LATERAL (SIDEBAR) ---
 # El botón de refresco y los filtros comunes pueden ir aquí si quieres que aparezcan en todas las páginas.
