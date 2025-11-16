@@ -6,4 +6,5 @@ __pycache__/
 data/
 .streamlit/
 notebooks/
-.claudre/
+.claude/
+manual_info/

@@ -83,6 +83,61 @@ def init_db(db_path: str):
         )
     """)
 
+    # Tablas para planificación de entrenamientos
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS training_plans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            week_start_date TEXT NOT NULL,
+            week_number INTEGER,
+            goal TEXT,
+            notes TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            status TEXT DEFAULT 'active'
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS planned_workouts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            plan_id INTEGER,
+            date TEXT NOT NULL,
+            workout_type TEXT,
+            distance_km REAL,
+            description TEXT,
+            pace_objective TEXT,
+            notes TEXT,
+            status TEXT DEFAULT 'pending',
+            linked_activity_id INTEGER,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (plan_id) REFERENCES training_plans(id),
+            FOREIGN KEY (linked_activity_id) REFERENCES activities(id)
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS workout_feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            planned_workout_id INTEGER,
+            activity_id INTEGER,
+            sensations TEXT,
+            completed_as_planned INTEGER DEFAULT 1,
+            notes TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (planned_workout_id) REFERENCES planned_workouts(id),
+            FOREIGN KEY (activity_id) REFERENCES activities(id)
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS chat_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            role TEXT NOT NULL,
+            content TEXT,
+            timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+            context_summary TEXT
+        )
+    """)
+
     # Migración "suave": añade columnas si la tabla ya existía
     cur.execute("PRAGMA table_info(activities)")
     cols = [row[1] for row in cur.fetchall()]

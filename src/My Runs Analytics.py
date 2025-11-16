@@ -35,11 +35,14 @@ st.header("Bienvenido a tu panel de análisis de carreras")
 
 st.info("Selecciona una de las páginas en el menú de la izquierda para comenzar el análisis.")
 st.markdown("""
-Esta aplicación te permite visualizar y analizar todas las carreras que has sincronizado desde Strava.
+Esta aplicación te permite visualizar y analizar todas las carreras que has sincronizado desde Strava,
+con planificación inteligente de entrenamientos mediante IA.
 
 **Características principales:**
-- **Dashboard General:** Un resumen de tus métricas clave y análisis de progreso.
-- **Histórico Completo:** Una tabla con todas tus actividades para buscar, filtrar y analizar en detalle.
+- **📊 Dashboard General:** Resumen de tus métricas clave y análisis de progreso.
+- **📋 Histórico Completo:** Tabla con todas tus actividades para buscar, filtrar y analizar en detalle.
+- **📅 Planificación:** Gestiona tus planes de entrenamiento semanales y vincula actividades.
+- **🤖 Coach IA:** Chatbot inteligente que analiza tu progreso y crea planes personalizados.
 
 ¡Usa el menú de la izquierda para navegar!
 """)
