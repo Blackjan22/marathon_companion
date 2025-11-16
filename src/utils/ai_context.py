@@ -20,6 +20,40 @@ def generate_initial_context() -> str:
     """
     context_parts = []
 
+    # 0. Perfil del corredor (NUEVO)
+    try:
+        profile = ai_functions.get_runner_profile()
+        if profile.get('has_profile') and profile['profile']:
+            p = profile['profile']
+            context_parts.append(f"**Perfil del Corredor:**")
+            if p.get('name'):
+                context_parts.append(f"- Nombre: {p['name']}")
+            if p.get('current_goal'):
+                context_parts.append(f"- Objetivo: {p['current_goal']}")
+            if p.get('goal_race_date'):
+                from datetime import datetime
+                race_date = datetime.fromisoformat(p['goal_race_date'])
+                days_to_race = (race_date.date() - datetime.now().date()).days
+                if days_to_race > 0:
+                    context_parts.append(f"- Fecha objetivo: {race_date.strftime('%d/%m/%Y')} (en {days_to_race} días)")
+            if p.get('training_philosophy'):
+                context_parts.append(f"- Filosofía: {p['training_philosophy']}")
+
+            # PRs
+            prs = []
+            if p.get('pr_5k'):
+                prs.append(f"5K: {p['pr_5k']}")
+            if p.get('pr_10k'):
+                prs.append(f"10K: {p['pr_10k']}")
+            if p.get('pr_half'):
+                prs.append(f"Media: {p['pr_half']}")
+            if prs:
+                context_parts.append(f"- PRs: {', '.join(prs)}")
+        else:
+            context_parts.append("**Perfil:** No configurado (recomienda ir a la página de Perfil)")
+    except Exception as e:
+        context_parts.append(f"(Error cargando perfil: {str(e)})")
+
     # 1. Resumen de actividad reciente
     try:
         recent = ai_functions.get_recent_activities(days=7)
@@ -89,6 +123,16 @@ def generate_initial_context() -> str:
             context_parts.append(notes_summary)
     except Exception as e:
         context_parts.append(f"(Error cargando notas: {str(e)})")
+
+    # 5. Análisis de rendimiento (NUEVO)
+    try:
+        trends = ai_functions.analyze_performance_trends(weeks=4)
+        if trends.get('status') != 'insufficient_data' and trends.get('trends'):
+            context_parts.append(f"\n**Análisis de Rendimiento (últimas 4 semanas):**")
+            for trend in trends['trends']:
+                context_parts.append(f"  {trend['message']}")
+    except Exception as e:
+        pass  # No mostrar error si no hay suficientes datos
 
     return "\n".join(context_parts)
 

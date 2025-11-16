@@ -220,6 +220,64 @@ delete_workout_declaration = FunctionDeclaration(
     }
 )
 
+get_runner_profile_declaration = FunctionDeclaration(
+    name="get_runner_profile",
+    description="Obtiene el perfil completo del corredor (antropometría, PRs, objetivos, filosofía de entrenamiento). IMPORTANTE: Usa esta función al inicio de cada conversación para personalizar tus recomendaciones.",
+    parameters={
+        "type": "object",
+        "properties": {},
+        "required": []
+    }
+)
+
+analyze_performance_trends_declaration = FunctionDeclaration(
+    name="analyze_performance_trends",
+    description="Analiza tendencias de rendimiento (FC vs ritmo) para detectar mejoras aeróbicas o señales de fatiga. Examina la evolución de ritmo y FC en entrenamientos similares. Úsalo para evaluar el estado de forma antes de planificar.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "weeks": {
+                "type": "integer",
+                "description": "Número de semanas hacia atrás para analizar. Por defecto 4 semanas."
+            }
+        },
+        "required": []
+    }
+)
+
+predict_race_times_declaration = FunctionDeclaration(
+    name="predict_race_times",
+    description="Predice tiempos de carrera usando la fórmula de Riegel (T2 = T1 * (D2/D1)^1.06). Útil para estimar rendimiento en otras distancias basándote en una marca real. Por ejemplo: 10k en 43:20 → predecir tiempo en media maratón.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "current_race_distance_km": {
+                "type": "number",
+                "description": "Distancia de la marca actual en kilómetros (ej: 10.0 para 10k, 21.0975 para media)"
+            },
+            "current_time_minutes": {
+                "type": "number",
+                "description": "Tiempo en la distancia actual en minutos decimales (ej: 43.33 para 43:20)"
+            },
+            "target_race_distance_km": {
+                "type": "number",
+                "description": "Distancia objetivo para la predicción en kilómetros (ej: 21.0975 para media maratón)"
+            }
+        },
+        "required": ["current_race_distance_km", "current_time_minutes", "target_race_distance_km"]
+    }
+)
+
+analyze_training_load_advanced_declaration = FunctionDeclaration(
+    name="analyze_training_load_advanced",
+    description="Análisis avanzado de carga de entrenamiento con detección de sobreentrenamiento. Examina volumen, intensidad, FC, y palabras clave de fatiga en notas privadas. Proporciona warnings y recomendaciones específicas. Úsalo antes de proponer planes exigentes.",
+    parameters={
+        "type": "object",
+        "properties": {},
+        "required": []
+    }
+)
+
 
 # Agrupar todas las herramientas en un Tool
 running_coach_tools = Tool(
@@ -232,5 +290,9 @@ running_coach_tools = Tool(
         update_workout_declaration,
         add_workout_to_current_plan_declaration,
         delete_workout_declaration,
+        get_runner_profile_declaration,
+        analyze_performance_trends_declaration,
+        predict_race_times_declaration,
+        analyze_training_load_advanced_declaration,
     ]
 )

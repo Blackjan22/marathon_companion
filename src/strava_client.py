@@ -138,6 +138,30 @@ def init_db(db_path: str):
         )
     """)
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS runner_profile (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            height_cm REAL,
+            weight_kg REAL,
+            age INTEGER,
+            vo2max_estimate REAL,
+            threshold_pace TEXT,
+            easy_pace_min TEXT,
+            easy_pace_max TEXT,
+            training_philosophy TEXT,
+            current_goal TEXT,
+            goal_race_date TEXT,
+            goal_race_distance TEXT,
+            pr_5k TEXT,
+            pr_10k TEXT,
+            pr_half TEXT,
+            pr_marathon TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     # Migración "suave": añade columnas si la tabla ya existía
     cur.execute("PRAGMA table_info(activities)")
     cols = [row[1] for row in cur.fetchall()]

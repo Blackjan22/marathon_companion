@@ -371,6 +371,331 @@ def delete_workout(workout_id) -> dict:
     }
 
 
+def get_runner_profile() -> dict:
+    """
+    Obtiene el perfil completo del corredor para personalizar recomendaciones.
+
+    Returns:
+        Diccionario con toda la información del perfil del corredor
+    """
+    conn = sqlite3.connect('data/strava_activities.db')
+
+    query = """
+        SELECT * FROM runner_profile
+        ORDER BY updated_at DESC
+        LIMIT 1
+    """
+    df = pd.read_sql_query(query, conn)
+    conn.close()
+
+    if df.empty:
+        return {
+            "profile": None,
+            "message": "No hay perfil configurado. Ve a la página de Perfil para crear uno."
+        }
+
+    profile_info = df.iloc[0].to_dict()
+
+    return {
+        "profile": profile_info,
+        "has_profile": True
+    }
+
+
+def analyze_performance_trends(weeks: int = 4) -> dict:
+    """
+    Analiza tendencias de rendimiento para detectar mejoras o fatiga.
+
+    Examina la evolución de ritmo vs FC en entrenamientos similares,
+    detecta inconsistencias que puedan indicar fatiga o mejora de forma.
+
+    Args:
+        weeks: Número de semanas hacia atrás para analizar (por defecto 4)
+
+    Returns:
+        Diccionario con análisis de tendencias y recomendaciones
+    """
+    conn = sqlite3.connect('data/strava_activities.db')
+    cutoff_date = (datetime.now() - timedelta(weeks=weeks)).isoformat()
+
+    # Obtener actividades recientes con FC
+    query = """
+        SELECT
+            start_date_local,
+            distance/1000 as distance_km,
+            moving_time,
+            (moving_time/60)/(distance/1000) as pace_min_km,
+            average_heartrate as avg_hr,
+            description,
+            private_note
+        FROM activities
+        WHERE type = 'Run'
+        AND start_date_local >= ?
+        AND average_heartrate IS NOT NULL
+        AND distance > 3000
+        ORDER BY start_date_local ASC
+    """
+    df = pd.read_sql_query(query, conn, params=(cutoff_date,))
+    conn.close()
+
+    if df.empty or len(df) < 3:
+        return {
+            "status": "insufficient_data",
+            "message": "Se necesitan al menos 3 entrenamientos con FC en las últimas semanas"
+        }
+
+    # Analizar rodajes fáciles (ritmo > 5:00/km)
+    easy_runs = df[df['pace_min_km'] > 5.0].copy()
+
+    analysis = {
+        "total_runs": len(df),
+        "weeks_analyzed": weeks,
+        "trends": []
+    }
+
+    if len(easy_runs) >= 3:
+        # Dividir en primera mitad vs segunda mitad del período
+        mid_point = len(easy_runs) // 2
+        first_half = easy_runs.iloc[:mid_point]
+        second_half = easy_runs.iloc[mid_point:]
+
+        avg_hr_first = first_half['avg_hr'].mean()
+        avg_hr_second = second_half['avg_hr'].mean()
+        avg_pace_first = first_half['pace_min_km'].mean()
+        avg_pace_second = second_half['pace_min_km'].mean()
+
+        hr_change = ((avg_hr_second - avg_hr_first) / avg_hr_first) * 100
+        pace_change = ((avg_pace_second - avg_pace_first) / avg_pace_first) * 100
+
+        analysis["easy_runs_analysis"] = {
+            "first_half_avg_hr": round(avg_hr_first, 1),
+            "second_half_avg_hr": round(avg_hr_second, 1),
+            "first_half_avg_pace": round(avg_pace_first, 2),
+            "second_half_avg_pace": round(avg_pace_second, 2),
+            "hr_change_pct": round(hr_change, 1),
+            "pace_change_pct": round(pace_change, 1),
+            "num_runs_analyzed": len(easy_runs),
+            "first_half_runs": len(first_half),
+            "second_half_runs": len(second_half)
+        }
+
+        # Interpretación con más detalle
+        if hr_change < -3 and pace_change < -2:
+            analysis["trends"].append({
+                "type": "positive",
+                "message": f"🟢 Mejora aeróbica clara: FC bajó de {round(avg_hr_first, 1)} a {round(avg_hr_second, 1)} ppm ({hr_change:+.1f}%) mientras el ritmo mejoró de {avg_pace_first:.2f} a {avg_pace_second:.2f} min/km ({pace_change:+.1f}%)"
+            })
+        elif hr_change < -3 and abs(pace_change) < 2:
+            analysis["trends"].append({
+                "type": "positive",
+                "message": f"🟢 Mejora en eficiencia: FC bajó de {round(avg_hr_first, 1)} a {round(avg_hr_second, 1)} ppm ({hr_change:+.1f}%) manteniendo ritmo estable ~{avg_pace_first:.2f} min/km"
+            })
+        elif hr_change > 3 and pace_change > 2:
+            analysis["trends"].append({
+                "type": "warning",
+                "message": f"🟡 Posible fatiga: FC subió de {round(avg_hr_first, 1)} a {round(avg_hr_second, 1)} ppm ({hr_change:+.1f}%) mientras el ritmo empeoró de {avg_pace_first:.2f} a {avg_pace_second:.2f} min/km ({pace_change:+.1f}%). Considera semana de descarga."
+            })
+        elif hr_change > 3 and abs(pace_change) < 2:
+            analysis["trends"].append({
+                "type": "warning",
+                "message": f"🟡 FC elevada: Subió de {round(avg_hr_first, 1)} a {round(avg_hr_second, 1)} ppm ({hr_change:+.1f}%) manteniendo ritmo ~{avg_pace_first:.2f} min/km. Posible fatiga acumulada."
+            })
+        elif abs(hr_change) < 2 and abs(pace_change) < 2:
+            analysis["trends"].append({
+                "type": "neutral",
+                "message": f"⚪ Forma estable: FC ~{round(avg_hr_first, 1)} ppm y ritmo ~{avg_pace_first:.2f} min/km consistentes"
+            })
+
+    # Analizar entrenamientos de calidad (ritmo < 4:45/km)
+    quality_runs = df[df['pace_min_km'] < 4.75].copy()
+
+    if len(quality_runs) >= 2:
+        analysis["quality_runs_count"] = len(quality_runs)
+        analysis["avg_quality_pace"] = round(quality_runs['pace_min_km'].mean(), 2)
+
+        if len(quality_runs) >= 2:
+            recent_quality = quality_runs.iloc[-1]
+            analysis["last_quality"] = {
+                "date": recent_quality['start_date_local'][:10],
+                "pace": round(recent_quality['pace_min_km'], 2),
+                "avg_hr": round(recent_quality['avg_hr'], 1) if pd.notna(recent_quality['avg_hr']) else None
+            }
+
+    return analysis
+
+
+def predict_race_times(current_race_distance_km: float, current_time_minutes: float,
+                       target_race_distance_km: float) -> dict:
+    """
+    Predice tiempos de carrera usando la fórmula de Riegel y proporciona análisis.
+
+    Fórmula: T2 = T1 * (D2/D1)^1.06
+    donde T = tiempo, D = distancia
+
+    Args:
+        current_race_distance_km: Distancia de la marca actual (ej: 10)
+        current_time_minutes: Tiempo en la distancia actual en minutos (ej: 43.33 para 43:20)
+        target_race_distance_km: Distancia objetivo para predecir (ej: 21.0975)
+
+    Returns:
+        Diccionario con predicción de tiempo y análisis de viabilidad
+    """
+    # Fórmula de Riegel (exponente 1.06 es el estándar)
+    predicted_time_minutes = current_time_minutes * ((target_race_distance_km / current_race_distance_km) ** 1.06)
+
+    predicted_hours = int(predicted_time_minutes // 60)
+    predicted_mins = int(predicted_time_minutes % 60)
+    predicted_secs = int((predicted_time_minutes % 1) * 60)
+
+    # Calcular ritmo previsto
+    predicted_pace = predicted_time_minutes / target_race_distance_km
+
+    # Distancias comunes
+    distance_names = {
+        5.0: "5K",
+        10.0: "10K",
+        15.0: "15K",
+        21.0975: "Media Maratón",
+        42.195: "Maratón"
+    }
+
+    current_distance_name = distance_names.get(current_race_distance_km, f"{current_race_distance_km}km")
+    target_distance_name = distance_names.get(target_race_distance_km, f"{target_race_distance_km}km")
+
+    # Calcular ritmo actual
+    current_pace = current_time_minutes / current_race_distance_km
+
+    return {
+        "current_race": {
+            "distance": current_distance_name,
+            "time": f"{int(current_time_minutes // 60)}:{int(current_time_minutes % 60):02d}:{int((current_time_minutes % 1) * 60):02d}",
+            "pace_per_km": f"{int(current_pace)}:{int((current_pace % 1) * 60):02d}"
+        },
+        "predicted_race": {
+            "distance": target_distance_name,
+            "predicted_time": f"{predicted_hours}:{predicted_mins:02d}:{predicted_secs:02d}",
+            "predicted_pace_per_km": f"{int(predicted_pace)}:{int((predicted_pace % 1) * 60):02d}",
+            "predicted_time_minutes": round(predicted_time_minutes, 2)
+        },
+        "analysis": {
+            "formula": "Riegel (exponente 1.06)",
+            "note": "Esta predicción asume un entrenamiento específico adecuado para la distancia objetivo"
+        }
+    }
+
+
+def analyze_training_load_advanced() -> dict:
+    """
+    Análisis avanzado de carga de entrenamiento con detección de patrones de fatiga.
+
+    Examina volumen, intensidad, RPE (de notas) y detecta señales de sobreentrenamiento.
+
+    Returns:
+        Diccionario con análisis detallado de carga y recomendaciones
+    """
+    conn = sqlite3.connect('data/strava_activities.db')
+
+    # Últimas 6 semanas de datos
+    cutoff_date = (datetime.now() - timedelta(weeks=6)).isoformat()
+
+    query = """
+        SELECT
+            strftime('%Y-%W', start_date_local) as week,
+            COUNT(*) as num_runs,
+            SUM(distance)/1000 as total_km,
+            AVG(average_heartrate) as avg_hr,
+            AVG((moving_time/60)/(distance/1000)) as avg_pace,
+            GROUP_CONCAT(private_note, ' | ') as notes
+        FROM activities
+        WHERE type = 'Run'
+        AND start_date_local >= ?
+        GROUP BY week
+        ORDER BY week ASC
+    """
+
+    df = pd.read_sql_query(query, conn, params=(cutoff_date,))
+    conn.close()
+
+    if df.empty or len(df) < 2:
+        return {
+            "status": "insufficient_data",
+            "message": "Se necesitan al menos 2 semanas de datos"
+        }
+
+    # Análisis de progresión de carga
+    weeks = df['total_km'].tolist()
+    current_week = weeks[-1]
+    previous_week = weeks[-2] if len(weeks) > 1 else current_week
+    avg_previous_weeks = sum(weeks[:-1]) / len(weeks[:-1]) if len(weeks) > 1 else current_week
+
+    load_increase = ((current_week - previous_week) / previous_week * 100) if previous_week > 0 else 0
+
+    analysis = {
+        "weeks_analyzed": len(df),
+        "current_week_km": round(current_week, 1),
+        "previous_week_km": round(previous_week, 1),
+        "avg_last_weeks_km": round(avg_previous_weeks, 1),
+        "load_increase_pct": round(load_increase, 1),
+        "warnings": [],
+        "recommendations": []
+    }
+
+    # Detectar sobreentrenamiento
+    if load_increase > 15:
+        analysis["warnings"].append({
+            "level": "high",
+            "message": f"Aumento de volumen muy elevado ({load_increase:.1f}%). Riesgo de lesión aumentado."
+        })
+        analysis["recommendations"].append("Considera reducir volumen un 10-15% esta semana")
+    elif load_increase > 10:
+        analysis["warnings"].append({
+            "level": "medium",
+            "message": f"Aumento de volumen moderado-alto ({load_increase:.1f}%). Monitorea sensaciones."
+        })
+        analysis["recommendations"].append("Asegúrate de que los rodajes suaves sean realmente suaves (Z2)")
+
+    # Analizar FC tendencia
+    if len(df) >= 3:
+        hr_recent = df['avg_hr'].iloc[-2:].mean()
+        hr_older = df['avg_hr'].iloc[:-2].mean()
+
+        if pd.notna(hr_recent) and pd.notna(hr_older):
+            hr_change = ((hr_recent - hr_older) / hr_older) * 100
+
+            if hr_change > 3:
+                analysis["warnings"].append({
+                    "level": "medium",
+                    "message": f"FC media en aumento ({hr_change:.1f}%). Posible fatiga acumulada."
+                })
+                analysis["recommendations"].append("Prioriza recuperación y sueño esta semana")
+
+    # Análisis de notas privadas (buscar keywords de fatiga)
+    fatigue_keywords = ['cansado', 'pesadas', 'duro', 'mal', 'fatiga', 'agotado']
+    notes_text = ' '.join(df['notes'].dropna().astype(str).tolist()).lower()
+
+    fatigue_mentions = sum(1 for keyword in fatigue_keywords if keyword in notes_text)
+
+    if fatigue_mentions >= 2:
+        analysis["warnings"].append({
+            "level": "medium",
+            "message": f"Múltiples menciones de fatiga en tus notas ({fatigue_mentions} referencias)"
+        })
+        analysis["recommendations"].append("Considera semana de descarga (reducir 20-30% volumen)")
+
+    # Estado general
+    if not analysis["warnings"]:
+        analysis["status"] = "good"
+        analysis["summary"] = "Carga de entrenamiento controlada. Continúa con el plan."
+    elif len([w for w in analysis["warnings"] if w["level"] == "high"]) > 0:
+        analysis["status"] = "high_risk"
+        analysis["summary"] = "Riesgo elevado de sobreentrenamiento. Acción inmediata recomendada."
+    else:
+        analysis["status"] = "caution"
+        analysis["summary"] = "Señales de fatiga detectadas. Monitorea y ajusta si es necesario."
+
+    return analysis
+
+
 def add_workout_to_current_plan(date: str, workout_type: str, distance_km: float,
                                   description: str = None, pace_objective: str = None,
                                   notes: str = None) -> dict:

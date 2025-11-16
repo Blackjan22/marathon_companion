@@ -55,7 +55,8 @@ running_analytics/
 - **Dashboard General**: Métricas clave, gráficos de progreso y recomendaciones de entrenamiento.
 - **Histórico Completo**: Tabla detallada con filtros, análisis de actividades individuales y visualización de laps.
 - **Planificación**: Vista de calendario con entrenamientos planificados vs realizados.
-- **Coach IA**: Chatbot con Gemini para análisis y planificación personalizada.
+- **Perfil del Corredor**: Configura tus objetivos, PRs y filosofía de entrenamiento.
+- **Coach IA**: Chatbot con Gemini para análisis profundo y planificación personalizada.
 - Botón de sincronización integrado para actualizar actividades desde Strava.
 
 ### 🆕 Sistema de Planificación de Entrenamientos
@@ -65,36 +66,56 @@ running_analytics/
 - **Seguimiento de progreso**: Estadísticas de cumplimiento del plan.
 - **Feedback integrado**: Las notas privadas de Strava se sincronizan automáticamente con la app.
 
-### 🤖 Coach con Inteligencia Artificial (Gemini)
-- **Modelo robusto**: Usa `gemini-2.5-flash` optimizado para function calling y análisis complejo
-- **Análisis inteligente**: El chatbot puede consultar tu historial de entrenamientos y estadísticas.
-- **Planificación personalizada**: Crea planes semanales basados en tu progreso y feedback.
-- **Memoria contextual**: El sistema carga automáticamente información relevante al inicio.
-- **✨ Function Calling Automático**: El modelo decide cuándo ejecutar funciones para acceder a datos y crear planes.
-- **Análisis detallado de laps**: Procesa todos los laps de entrenamientos (series, intervalos, etc.) sin limitaciones
-- **Análisis de carga**: Detecta sobreentrenamiento y recomienda ajustes.
-- **Conversaciones persistentes**: Historial guardado en base de datos.
-- **Transparencia**: Puedes ver qué funciones ejecuta el coach en cada respuesta.
-- **Fallback robusto**: Si el modelo falla, muestra los datos obtenidos de forma estructurada
+### 👤 Perfil del Corredor (NUEVO)
+- **Configuración completa**: Define tu nombre, altura, peso, edad y VO2max estimado
+- **Zonas de entrenamiento**: Configura tus ritmos (umbral, fácil min/max) para recomendaciones personalizadas
+- **Objetivo actual**: Define tu carrera objetivo, distancia y fecha
+- **Filosofía de entrenamiento**: Describe tu enfoque (días disponibles, prioridades, restricciones)
+- **Records personales (PRs)**: Almacena tus mejores marcas en 5K, 10K, Media Maratón y Maratón
+- **Integración con Coach IA**: El Coach consulta automáticamente tu perfil para personalizar recomendaciones
+- **Calculadora de días hasta objetivo**: Visualiza cuánto tiempo tienes hasta tu carrera
 
-**Funciones disponibles para el Coach IA:**
+### 🤖 Coach con Inteligencia Artificial (Gemini) - MEJORADO
+- **Entrenador analítico y data-driven**: Prioriza salud y consistencia sobre rendimiento puro
+- **Modelo robusto**: Usa `gemini-2.5-flash` optimizado para function calling y análisis complejo
+- **Razonamiento fisiológico**: Explica el "por qué" de cada entrenamiento (sistemas energéticos, adaptaciones)
+- **Análisis profundo de tendencias**: Detecta mejoras aeróbicas o señales de fatiga analizando FC vs ritmo
+- **Predicciones de tiempos**: Fórmula de Riegel para estimar rendimiento en otras distancias
+- **Detección de sobreentrenamiento**: Analiza volumen, FC, y palabras clave de fatiga en notas privadas
+- **Respuestas estructuradas**: Formato claro con secciones (Filosofía → Análisis → Plan → Estrategia → Notas)
+- **Personalización total**: Consulta tu perfil (objetivos, PRs, filosofía) para adaptar recomendaciones
+- **Análisis de laps ilimitado**: Procesa todos los laps de entrenamientos (series, intervalos) sin limitaciones
+- **Memoria contextual mejorada**: Carga automáticamente perfil, notas recientes, y análisis de tendencias
+- **Conversaciones persistentes**: Historial guardado en base de datos
+- **Transparencia**: Puedes ver qué funciones ejecuta el coach en cada respuesta
+
+**12 Funciones disponibles para el Coach IA:**
+
+*Perfil y contexto:*
+- `get_runner_profile()`: Ver perfil completo (objetivos, PRs, filosofía de entrenamiento)
 
 *Consulta de datos:*
 - `get_recent_activities(days)`: Ver entrenamientos de los últimos N días
 - `get_weekly_stats(weeks)`: Estadísticas agregadas por semana
-- `get_activity_details(activity_id)`: Detalles completos con laps de un entreno
-- `get_current_plan()`: Consultar plan activo
+- `get_activity_details(activity_id)`: Detalles completos con laps y notas privadas
 
-*Acciones:*
-- `create_training_plan(week_start_date, workouts, goal, notes)`: Crear nuevos planes
-- `update_workout(workout_id, changes)`: Modificar entrenamientos planificados
+*Análisis avanzado (NUEVO):*
+- `analyze_performance_trends(weeks)`: Detecta mejoras aeróbicas o fatiga (FC vs ritmo)
+- `predict_race_times(current_dist, current_time, target_dist)`: Calculadora de equivalencias
+- `analyze_training_load_advanced()`: Detección de sobreentrenamiento con warnings y recomendaciones
+
+*Planificación:*
+- `get_current_plan()`: Consultar plan activo
+- `create_training_plan(...)`: Crear planes completos nuevos
 - `add_workout_to_current_plan(...)`: Añadir entrenamientos al plan activo
+- `update_workout(workout_id, changes)`: Modificar entrenamientos planificados
 - `delete_workout(workout_id)`: Eliminar entrenamientos del plan
 
-El coach decide automáticamente qué funciones ejecutar según tu pregunta. Por ejemplo:
-- "¿Cómo ha sido mi última semana?" → Ejecuta `get_recent_activities(7)` y `get_weekly_stats(1)`
-- "Planifica la próxima semana" → Ejecuta `get_recent_activities()`, `get_current_plan()` y luego `create_training_plan()`
-- "Muéstrame los detalles de mi último entreno" → Ejecuta `get_recent_activities(1)` y luego `get_activity_details(activity_id)`
+El coach decide automáticamente qué funciones ejecutar según tu pregunta. Ejemplos:
+- "¿Cómo voy respecto a hace un mes?" → Ejecuta `analyze_performance_trends(4)` y analiza evolución
+- "Si corro 10k en 43:20, ¿qué tiempo puedo hacer en media?" → Ejecuta `predict_race_times(10, 43.33, 21.0975)`
+- "Planifica las próximas 2 semanas" → Ejecuta `get_runner_profile()`, `analyze_training_load_advanced()`, `analyze_performance_trends()` y crea el plan
+- "¿Tengo señales de sobreentrenamiento?" → Ejecuta `analyze_training_load_advanced()` y da recomendaciones
 
 ---
 
