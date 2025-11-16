@@ -12,13 +12,53 @@ st.set_page_config(
 )
 
 # DEBUG: Mostrar info de base de datos
+import os
 db_url = get_database_url()
-if db_url:
-    st.sidebar.success(f"✅ PostgreSQL detectado ({len(db_url)} chars)")
-    st.sidebar.caption(f"Host: {db_url.split('@')[1].split(':')[0] if '@' in db_url else 'unknown'}")
-else:
-    st.sidebar.warning("⚠️ Usando SQLite local")
-st.sidebar.caption(f"is_postgres: {is_postgres()}")
+
+with st.sidebar.expander("🔍 Debug BD", expanded=True):
+    st.write("**Detección de BD:**")
+    if db_url:
+        st.success(f"✅ URL encontrada ({len(db_url)} chars)")
+        try:
+            st.caption(f"Host: {db_url.split('@')[1].split(':')[0] if '@' in db_url else 'unknown'}")
+        except:
+            st.caption("Host: error parseando")
+    else:
+        st.warning("⚠️ No se detectó DATABASE_URL")
+
+    st.caption(f"is_postgres(): {is_postgres()}")
+    st.caption(f"POSTGRES_AVAILABLE: {os.getenv('POSTGRES_AVAILABLE', 'No set')}")
+
+    # Mostrar qué secrets están disponibles
+    try:
+        st.write("**Secrets disponibles:**")
+        st.write(list(st.secrets.keys()))
+        if 'database' in st.secrets:
+            st.success("✅ 'database' key encontrada")
+            st.caption(f"URL length: {len(st.secrets['database']['url'])}")
+        else:
+            st.error("❌ 'database' key NO encontrada")
+    except Exception as e:
+        st.error(f"Error leyendo secrets: {e}")
+
+    # Test de conexión directo
+    if st.button("🔌 Test conexión PostgreSQL"):
+        if not db_url:
+            st.error("No hay URL de base de datos configurada")
+        else:
+            try:
+                import psycopg2
+                st.info(f"Intentando conectar a: {db_url[:50]}...")
+                conn = psycopg2.connect(db_url)
+                st.success("✅ ¡Conexión exitosa!")
+                cursor = conn.cursor()
+                cursor.execute("SELECT version();")
+                version = cursor.fetchone()
+                st.write(f"PostgreSQL version: {version[0][:50]}...")
+                conn.close()
+            except Exception as e:
+                st.error(f"❌ Error de conexión: {type(e).__name__}")
+                st.code(str(e))
 
 # --- BARRA LATERAL (SIDEBAR) ---
 # El botón de refresco y los filtros comunes pueden ir aquí si quieres que aparezcan en todas las páginas.
