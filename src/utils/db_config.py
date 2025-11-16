@@ -28,16 +28,26 @@ def get_database_url() -> Optional[str]:
     db_url = os.getenv("DATABASE_URL")
 
     if db_url:
+        print(f"[DB_CONFIG] Using DATABASE_URL from environment")
         return db_url
 
     # Intentar obtener desde Streamlit secrets
     try:
         import streamlit as st
-        if hasattr(st, 'secrets') and 'database' in st.secrets:
-            return st.secrets['database']['url']
-    except:
-        pass
+        if hasattr(st, 'secrets'):
+            print(f"[DB_CONFIG] Streamlit secrets available: {list(st.secrets.keys())}")
+            if 'database' in st.secrets:
+                url = st.secrets['database']['url']
+                print(f"[DB_CONFIG] Using database URL from Streamlit secrets (length: {len(url)})")
+                return url
+            else:
+                print("[DB_CONFIG] 'database' key not found in Streamlit secrets")
+        else:
+            print("[DB_CONFIG] Streamlit secrets not available")
+    except Exception as e:
+        print(f"[DB_CONFIG] Error reading Streamlit secrets: {e}")
 
+    print("[DB_CONFIG] No database URL found, will use SQLite")
     return None
 
 
