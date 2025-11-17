@@ -1,13 +1,12 @@
 # src/delete_activity.py
 # como usar: python src/delete_activity.py 123456789
+# Funciona con SQLite local o PostgreSQL (Supabase)
 
-import sqlite3
 import sys
-
-DB_PATH = "data/strava_activities.db"
+from utils.db_config import get_connection
 
 def delete_activity_by_id(activity_id: int):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_connection()
     cur = conn.cursor()
 
     # Eliminar splits primero (por FK)
@@ -17,7 +16,7 @@ def delete_activity_by_id(activity_id: int):
     conn.commit()
     conn.close()
 
-    print(f"✅ Actividad {activity_id} eliminada de la base de datos local.")
+    print(f"✅ Actividad {activity_id} eliminada de la base de datos.")
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:

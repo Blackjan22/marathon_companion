@@ -7,7 +7,7 @@ import sys
 
 # Añadir directorio actual al path para imports
 sys.path.insert(0, os.path.dirname(__file__))
-from utils.db_config import get_connection
+from utils.db_config import get_connection, is_postgres
 
 load_dotenv(override=True)
 
@@ -33,6 +33,10 @@ def get_access_token():
 def init_db(db_path: str):
     conn = get_connection()
     cur = conn.cursor()
+
+    # Determinar sintaxis según el tipo de BD
+    # PostgreSQL usa SERIAL, SQLite usa INTEGER PRIMARY KEY AUTOINCREMENT
+    auto_increment = "SERIAL PRIMARY KEY" if is_postgres() else "INTEGER PRIMARY KEY AUTOINCREMENT"
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS activities (
@@ -87,9 +91,9 @@ def init_db(db_path: str):
     """)
 
     # Tablas para planificación de entrenamientos
-    cur.execute("""
+    cur.execute(f"""
         CREATE TABLE IF NOT EXISTS training_plans (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {auto_increment},
             week_start_date TEXT NOT NULL,
             week_number INTEGER,
             goal TEXT,
@@ -99,9 +103,9 @@ def init_db(db_path: str):
         )
     """)
 
-    cur.execute("""
+    cur.execute(f"""
         CREATE TABLE IF NOT EXISTS planned_workouts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {auto_increment},
             plan_id INTEGER,
             date TEXT NOT NULL,
             workout_type TEXT,
@@ -117,9 +121,9 @@ def init_db(db_path: str):
         )
     """)
 
-    cur.execute("""
+    cur.execute(f"""
         CREATE TABLE IF NOT EXISTS workout_feedback (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {auto_increment},
             planned_workout_id INTEGER,
             activity_id INTEGER,
             sensations TEXT,
@@ -131,9 +135,9 @@ def init_db(db_path: str):
         )
     """)
 
-    cur.execute("""
+    cur.execute(f"""
         CREATE TABLE IF NOT EXISTS chat_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {auto_increment},
             role TEXT NOT NULL,
             content TEXT,
             timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -141,9 +145,9 @@ def init_db(db_path: str):
         )
     """)
 
-    cur.execute("""
+    cur.execute(f"""
         CREATE TABLE IF NOT EXISTS runner_profile (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {auto_increment},
             name TEXT,
             height_cm REAL,
             weight_kg REAL,
@@ -166,8 +170,19 @@ def init_db(db_path: str):
     """)
 
     # Migración "suave": añade columnas si la tabla ya existía
-    cur.execute("PRAGMA table_info(activities)")
-    cols = [row[1] for row in cur.fetchall()]
+    if is_postgres():
+        # PostgreSQL: usar information_schema
+        cur.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'activities'
+        """)
+        cols = [row[0] for row in cur.fetchall()]
+    else:
+        # SQLite: usar PRAGMA
+        cur.execute("PRAGMA table_info(activities)")
+        cols = [row[1] for row in cur.fetchall()]
+
     if "description" not in cols:
         cur.execute("ALTER TABLE activities ADD COLUMN description TEXT")
     if "private_note" not in cols:
@@ -217,9 +232,13 @@ def download_and_store_runs(db_path="data/strava_activities.db", max_pages=50):
             detail_resp.raise_for_status()
             detail = detail_resp.json()
 
-            # Insertar actividad (incluye description y private_note)
+            # Insertar/actualizar actividad (compatible con SQLite y PostgreSQL)
+            # Primero intentar borrar si existe
+            cur.execute("DELETE FROM activities WHERE id = ?", (detail["id"],))
+
+            # Luego insertar
             cur.execute("""
-                INSERT OR REPLACE INTO activities (
+                INSERT INTO activities (
                     id, name, description, private_note, start_date_local, distance, moving_time, elapsed_time, average_speed, average_heartrate, total_elevation_gain, type, sport_type
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
@@ -331,9 +350,13 @@ def sync_new_activities(db_path="data/strava_activities.db"):
             detail_resp.raise_for_status()
             detail = detail_resp.json()
 
-            # Insertar/actualizar actividad (igual que ya tienes)
+            # Insertar/actualizar actividad (compatible con SQLite y PostgreSQL)
+            # Primero intentar borrar si existe
+            cur.execute("DELETE FROM activities WHERE id = ?", (detail["id"],))
+
+            # Luego insertar
             cur.execute("""
-                INSERT OR REPLACE INTO activities (
+                INSERT INTO activities (
                     id, name, description, private_note, start_date_local, distance, moving_time, elapsed_time, average_speed,
                     average_heartrate, total_elevation_gain, type, sport_type
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

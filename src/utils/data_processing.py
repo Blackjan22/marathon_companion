@@ -2,15 +2,15 @@
 import streamlit as st
 import pandas as pd
 import pytz
-import sqlite3
 from datetime import datetime
+from .db_config import get_connection
 
 # La decoración de caché se queda con la función
 @st.cache_data
 def load_data():
-    """Carga y procesa los datos desde la base de datos SQLite"""
+    """Carga y procesa los datos desde la base de datos (SQLite o PostgreSQL)"""
     try:
-        conn = sqlite3.connect('data/strava_activities.db')
+        conn = get_connection()
         
         # Cargar actividades
         activities_query = "SELECT * FROM activities WHERE type = 'Run' ORDER BY start_date_local DESC"
