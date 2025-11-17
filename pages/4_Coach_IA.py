@@ -315,95 +315,93 @@ with st.sidebar:
     st.caption("🤖 Modelo: **gemini-2.0-flash-exp**")
     st.caption("   (Más estable para function calling)")
 
-    # Mostrar estado SSL
+    st.divider()
+
+    # Mostrar opciones SSL solo en entorno local (cuando existe certificado proxy)
     proxy_cert = os.path.expanduser("~/Credentials/rootcaCert.pem")
-    combined_cert = os.path.expanduser("~/.config/combined_cert.pem")
+    if os.path.exists(proxy_cert):
+        with st.expander("🔧 Configuración SSL (Solo desarrollo local)"):
+            combined_cert = os.path.expanduser("~/.config/combined_cert.pem")
 
-    if os.path.exists(combined_cert):
-        st.caption("🔒 Usando certificado combinado (proxy + sistema)")
-    elif os.path.exists(proxy_cert):
-        st.caption("🔒 Usando solo certificado proxy")
-    else:
-        st.caption("⚠️ Sin certificado proxy")
+            if os.path.exists(combined_cert):
+                st.caption("🔒 Usando certificado combinado (proxy + sistema)")
+            elif os.path.exists(proxy_cert):
+                st.caption("🔒 Usando solo certificado proxy")
 
-    # Opción para desactivar verificación SSL (solo para desarrollo)
-    if "disable_ssl_verify" not in st.session_state:
-        st.session_state.disable_ssl_verify = False
+            # Opción para desactivar verificación SSL (solo para desarrollo)
+            if "disable_ssl_verify" not in st.session_state:
+                st.session_state.disable_ssl_verify = False
 
-    st.session_state.disable_ssl_verify = st.checkbox(
-        "Desactivar verificación SSL (solo VPN)",
-        value=st.session_state.disable_ssl_verify,
-        help="Activa esto si tienes problemas de SSL con la VPN corporativa. Solo para desarrollo."
-    )
+            st.session_state.disable_ssl_verify = st.checkbox(
+                "Desactivar verificación SSL (solo VPN)",
+                value=st.session_state.disable_ssl_verify,
+                help="Activa esto si tienes problemas de SSL con la VPN corporativa. Solo para desarrollo."
+            )
 
-    if st.session_state.disable_ssl_verify:
-        st.warning("⚠️ Verificación SSL desactivada")
-        # Configurar para no verificar SSL
-        os.environ['GRPC_SSL_CIPHER_SUITES'] = 'HIGH'
-        import ssl
-        ssl._create_default_https_context = ssl._create_unverified_context
+            if st.session_state.disable_ssl_verify:
+                st.warning("⚠️ Verificación SSL desactivada")
+                # Configurar para no verificar SSL
+                os.environ['GRPC_SSL_CIPHER_SUITES'] = 'HIGH'
+                import ssl
+                ssl._create_default_https_context = ssl._create_unverified_context
 
-    # Test de conexión
-    if st.button("🔌 Test de Conexión a Gemini"):
-        with st.spinner("Probando conexión..."):
-            try:
-                from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-
-                test_model = genai.GenerativeModel('gemini-2.0-flash-exp')
-
-                def test_connection():
-                    return test_model.generate_content("Responde solo: OK")
-
-                # Ejecutar con timeout de 10 segundos
-                with ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(test_connection)
+            # Test de conexión
+            if st.button("🔌 Test de Conexión a Gemini"):
+                with st.spinner("Probando conexión..."):
                     try:
-                        test_response = future.result(timeout=10)
-                        st.success("✅ Conexión exitosa con Gemini!")
-                        st.caption(f"Respuesta: {test_response.text[:50]}")
-                    except FuturesTimeoutError:
-                        st.error("❌ Timeout: La VPN está bloqueando Gemini")
-                        st.warning("No podrás usar el Coach IA con la VPN conectada")
-            except Exception as e:
-                st.error(f"❌ Error de conexión: {str(e)}")
+                        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
-    # Diagnóstico SSL
-    with st.expander("🔍 Diagnóstico SSL"):
-        st.caption("**Estado de certificados:**")
-        proxy_cert = os.path.expanduser("~/Credentials/rootcaCert.pem")
-        combined_cert = os.path.expanduser("~/.config/combined_cert.pem")
+                        test_model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
-        if os.path.exists(proxy_cert):
-            st.text(f"✓ Proxy cert: {proxy_cert}")
-        else:
-            st.text(f"✗ Proxy cert no encontrado")
+                        def test_connection():
+                            return test_model.generate_content("Responde solo: OK")
 
-        if os.path.exists(combined_cert):
-            st.text(f"✓ Certificado combinado: {combined_cert}")
-            # Mostrar tamaño para verificar que se creó bien
-            size = os.path.getsize(combined_cert)
-            st.text(f"  Tamaño: {size} bytes")
-        else:
-            st.text(f"✗ Certificado combinado no creado")
+                        # Ejecutar con timeout de 10 segundos
+                        with ThreadPoolExecutor(max_workers=1) as executor:
+                            future = executor.submit(test_connection)
+                            try:
+                                test_response = future.result(timeout=10)
+                                st.success("✅ Conexión exitosa con Gemini!")
+                                st.caption(f"Respuesta: {test_response.text[:50]}")
+                            except FuturesTimeoutError:
+                                st.error("❌ Timeout: La VPN está bloqueando Gemini")
+                                st.warning("No podrás usar el Coach IA con la VPN conectada")
+                    except Exception as e:
+                        st.error(f"❌ Error de conexión: {str(e)}")
 
-        st.caption("**Variables de entorno SSL:**")
-        ssl_vars = ['GRPC_DEFAULT_SSL_ROOTS_FILE_PATH', 'SSL_CERT_FILE', 'REQUESTS_CA_BUNDLE']
-        for var in ssl_vars:
-            value = os.environ.get(var, 'No configurada')
-            st.text(f"{var}: {value}")
+            # Diagnóstico SSL
+            st.caption("**Estado de certificados:**")
+            if os.path.exists(proxy_cert):
+                st.text(f"✓ Proxy cert: {proxy_cert}")
+            else:
+                st.text(f"✗ Proxy cert no encontrado")
 
-        if st.session_state.disable_ssl_verify:
-            st.warning("⚠️ Verificación SSL desactivada")
+            if os.path.exists(combined_cert):
+                st.text(f"✓ Certificado combinado: {combined_cert}")
+                # Mostrar tamaño para verificar que se creó bien
+                size = os.path.getsize(combined_cert)
+                st.text(f"  Tamaño: {size} bytes")
+            else:
+                st.text(f"✗ Certificado combinado no creado")
 
-        st.caption("**Soluciones si persiste el error:**")
-        st.text("""
+            st.caption("**Variables de entorno SSL:**")
+            ssl_vars = ['GRPC_DEFAULT_SSL_ROOTS_FILE_PATH', 'SSL_CERT_FILE', 'REQUESTS_CA_BUNDLE']
+            for var in ssl_vars:
+                value = os.environ.get(var, 'No configurada')
+                st.text(f"{var}: {value}")
+
+            if st.session_state.disable_ssl_verify:
+                st.warning("⚠️ Verificación SSL desactivada")
+
+            st.caption("**Soluciones si persiste el error:**")
+            st.text("""
 1. Activa 'Desactivar verificación SSL' arriba
 2. Desconéctate de la VPN corporativa
 3. Verifica que el proxy cert sea válido
 4. Reinicia Streamlit después de cambios
-        """)
+            """)
 
-    st.divider()
+        st.divider()
 
     if st.button("🆕 Nueva Conversación"):
         st.session_state.messages = []
