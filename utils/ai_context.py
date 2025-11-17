@@ -1,7 +1,7 @@
 # utils/ai_context.py
 """
-Sistema de gestión de contexto y memoria para el chatbot de IA.
-Proporciona contexto relevante automáticamente al iniciar conversaciones.
+Sistema de gestió de context i memòria per al chatbot d'IA.
+Proporciona context rellevant automàticament a l'iniciar converses.
 """
 
 import pandas as pd
@@ -13,31 +13,31 @@ from .db_config import get_connection
 
 def generate_initial_context() -> str:
     """
-    Genera un contexto inicial completo para el chatbot al iniciar una conversación.
+    Genera un context inicial complet per al chatbot a l'iniciar una conversa.
 
     Returns:
-        String con el contexto formateado para incluir en el system prompt
+        String amb el context formatat per incloure al system prompt
     """
     context_parts = []
 
-    # 0. Perfil del corredor (NUEVO)
+    # 0. Perfil del corredor
     try:
         profile = ai_functions.get_runner_profile()
         if profile.get('has_profile') and profile['profile']:
             p = profile['profile']
             context_parts.append(f"**Perfil del Corredor:**")
             if p.get('name'):
-                context_parts.append(f"- Nombre: {p['name']}")
+                context_parts.append(f"- Nom: {p['name']}")
             if p.get('current_goal'):
-                context_parts.append(f"- Objetivo: {p['current_goal']}")
+                context_parts.append(f"- Objectiu: {p['current_goal']}")
             if p.get('goal_race_date'):
                 from datetime import datetime
                 race_date = datetime.fromisoformat(p['goal_race_date'])
                 days_to_race = (race_date.date() - datetime.now().date()).days
                 if days_to_race > 0:
-                    context_parts.append(f"- Fecha objetivo: {race_date.strftime('%d/%m/%Y')} (en {days_to_race} días)")
+                    context_parts.append(f"- Data objectiu: {race_date.strftime('%d/%m/%Y')} (en {days_to_race} dies)")
             if p.get('training_philosophy'):
-                context_parts.append(f"- Filosofía: {p['training_philosophy']}")
+                context_parts.append(f"- Filosofia: {p['training_philosophy']}")
 
             # PRs
             prs = []
@@ -46,106 +46,106 @@ def generate_initial_context() -> str:
             if p.get('pr_10k'):
                 prs.append(f"10K: {p['pr_10k']}")
             if p.get('pr_half'):
-                prs.append(f"Media: {p['pr_half']}")
+                prs.append(f"Mitja: {p['pr_half']}")
             if prs:
                 context_parts.append(f"- PRs: {', '.join(prs)}")
         else:
-            context_parts.append("**Perfil:** No configurado (recomienda ir a la página de Perfil)")
+            context_parts.append("**Perfil:** No configurat (recomana anar a la pàgina de Perfil)")
     except Exception as e:
-        context_parts.append(f"(Error cargando perfil: {str(e)})")
+        context_parts.append(f"(Error carregant perfil: {str(e)})")
 
-    # 1. Resumen de actividad reciente
+    # 1. Resum d'activitat recent
     try:
         recent = ai_functions.get_recent_activities(days=7)
         if recent['count'] > 0:
-            context_parts.append(f"**Últimos 7 días:**")
-            context_parts.append(f"- {recent['count']} entrenamientos realizados")
-            context_parts.append(f"- {recent['total_km']} km totales")
-            context_parts.append(f"- Ritmo medio: {recent['avg_pace']:.2f} min/km")
+            context_parts.append(f"**Últims 7 dies:**")
+            context_parts.append(f"- {recent['count']} entrenaments realitzats")
+            context_parts.append(f"- {recent['total_km']} km totals")
+            context_parts.append(f"- Ritme mitjà: {recent['avg_pace']:.2f} min/km")
 
-            # Listar entrenamientos recientes
+            # Llistar entrenaments recents
             if recent['activities']:
-                context_parts.append("\nEntrenos recientes:")
-                for act in recent['activities'][:3]:  # Solo los 3 más recientes
+                context_parts.append("\nEntrenaments recents:")
+                for act in recent['activities'][:3]:  # Només els 3 més recents
                     date = pd.to_datetime(act['start_date_local']).strftime('%d/%m')
-                    # IMPORTANTE: Incluir el ID para que el modelo pueda usarlo con get_activity_details
+                    # IMPORTANT: Incloure l'ID perquè el model pugui usar-lo amb get_activity_details
                     context_parts.append(
                         f"  - {date}: {act['name']}, {act['distance_km']:.1f}km, {act['pace_min_km']:.2f} min/km (ID: {act['id']})"
                     )
     except Exception as e:
-        context_parts.append(f"(Error cargando actividades recientes: {str(e)})")
+        context_parts.append(f"(Error carregant activitats recents: {str(e)})")
 
-    # 2. Plan actual
+    # 2. Pla actual
     try:
         plan = ai_functions.get_current_plan()
         if plan['plan']:
             plan_info = plan['plan']
-            context_parts.append(f"\n**Plan activo:**")
-            context_parts.append(f"- Semana inicio: {plan_info['week_start_date']}")
+            context_parts.append(f"\n**Pla actiu:**")
+            context_parts.append(f"- Setmana inici: {plan_info['week_start_date']}")
             if plan_info['goal']:
-                context_parts.append(f"- Objetivo: {plan_info['goal']}")
+                context_parts.append(f"- Objectiu: {plan_info['goal']}")
 
-            # Estado de entrenamientos del plan
+            # Estat d'entrenaments del pla
             if plan['workouts']:
                 completed = sum(1 for w in plan['workouts'] if w['status'] == 'completed')
                 pending = sum(1 for w in plan['workouts'] if w['status'] == 'pending')
-                context_parts.append(f"- Entrenamientos: {completed}/{plan['num_workouts']} completados, {pending} pendientes")
+                context_parts.append(f"- Entrenaments: {completed}/{plan['num_workouts']} completats, {pending} pendents")
         else:
-            context_parts.append("\n**Plan activo:** No hay plan activo actualmente")
+            context_parts.append("\n**Pla actiu:** No hi ha pla actiu actualment")
     except Exception as e:
-        context_parts.append(f"(Error cargando plan actual: {str(e)})")
+        context_parts.append(f"(Error carregant pla actual: {str(e)})")
 
-    # 3. Estadísticas de las últimas semanas
+    # 3. Estadístiques de les últimes setmanes
     try:
         stats = ai_functions.get_weekly_stats(weeks=4)
         if stats['total_weeks'] > 0:
-            context_parts.append(f"\n**Últimas 4 semanas:**")
-            context_parts.append(f"- Promedio semanal: {stats['avg_weekly_km']:.1f} km/semana")
+            context_parts.append(f"\n**Últimes 4 setmanes:**")
+            context_parts.append(f"- Mitjana setmanal: {stats['avg_weekly_km']:.1f} km/setmana")
 
-            # Tendencia
+            # Tendència
             if len(stats['weeks']) >= 2:
                 last_week_km = stats['weeks'][0]['total_km']
                 prev_week_km = stats['weeks'][1]['total_km']
                 if last_week_km > prev_week_km * 1.1:
-                    context_parts.append("- Tendencia: ⬆️ Volumen creciente")
+                    context_parts.append("- Tendència: ⬆️ Volum creixent")
                 elif last_week_km < prev_week_km * 0.9:
-                    context_parts.append("- Tendencia: ⬇️ Volumen decreciente")
+                    context_parts.append("- Tendència: ⬇️ Volum decreixent")
                 else:
-                    context_parts.append("- Tendencia: ➡️ Volumen estable")
+                    context_parts.append("- Tendència: ➡️ Volum estable")
     except Exception as e:
-        context_parts.append(f"(Error cargando estadísticas: {str(e)})")
+        context_parts.append(f"(Error carregant estadístiques: {str(e)})")
 
-    # 4. Notas privadas recientes de Strava
+    # 4. Notes privades recents de Strava
     try:
         notes_summary = get_recent_private_notes_summary()
         if notes_summary:
-            context_parts.append(f"\n**Últimas notas de entrenamientos:**")
+            context_parts.append(f"\n**Últimes notes d'entrenaments:**")
             context_parts.append(notes_summary)
     except Exception as e:
-        context_parts.append(f"(Error cargando notas: {str(e)})")
+        context_parts.append(f"(Error carregant notes: {str(e)})")
 
-    # 5. Análisis de rendimiento (NUEVO)
+    # 5. Anàlisi de rendiment
     try:
         trends = ai_functions.analyze_performance_trends(weeks=4)
         if trends.get('status') != 'insufficient_data' and trends.get('trends'):
-            context_parts.append(f"\n**Análisis de Rendimiento (últimas 4 semanas):**")
+            context_parts.append(f"\n**Anàlisi de Rendiment (últimes 4 setmanes):**")
             for trend in trends['trends']:
                 context_parts.append(f"  {trend['message']}")
     except Exception as e:
-        pass  # No mostrar error si no hay suficientes datos
+        pass  # No mostrar error si no hi ha suficients dades
 
     return "\n".join(context_parts)
 
 
 def get_recent_private_notes_summary(days: int = 7) -> str:
     """
-    Obtiene las notas privadas de las actividades recientes de Strava.
+    Obté les notes privades de les activitats recents de Strava.
 
     Args:
-        days: Número de días hacia atrás para buscar notas
+        days: Nombre de dies enrere per cercar notes
 
     Returns:
-        String con resumen de las notas privadas o None si no hay
+        String amb resum de les notes privades o None si no n'hi ha
     """
     conn = get_connection()
     cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
@@ -186,22 +186,22 @@ def get_recent_private_notes_summary(days: int = 7) -> str:
 
 def summarize_conversation_turn(messages: List[Dict]) -> str:
     """
-    Crea un resumen de un turno de conversación para guardar contexto.
+    Crea un resum d'un torn de conversa per guardar context.
 
     Args:
-        messages: Lista de mensajes del turno
+        messages: Llista de missatges del torn
 
     Returns:
-        String con resumen del turno
+        String amb resum del torn
     """
-    # Para implementación futura: podríamos usar Gemini para generar resúmenes
-    # Por ahora, simplemente concatenamos los últimos mensajes
+    # Per implementació futura: podríem usar Gemini per generar resums
+    # Per ara, simplement concatenem els últims missatges
     if not messages:
         return ""
 
     summary_parts = []
-    for msg in messages[-3:]:  # Últimos 3 mensajes
-        role = "Usuario" if msg['role'] == 'user' else "Coach"
+    for msg in messages[-3:]:  # Últims 3 missatges
+        role = "Usuari" if msg['role'] == 'user' else "Coach"
         content_preview = msg['content'][:100] + "..." if len(msg['content']) > 100 else msg['content']
         summary_parts.append(f"{role}: {content_preview}")
 
@@ -210,46 +210,46 @@ def summarize_conversation_turn(messages: List[Dict]) -> str:
 
 def get_contextual_greeting() -> str:
     """
-    Genera un saludo contextual basado en el estado actual del atleta.
+    Genera una salutació contextual basada en l'estat actual de l'atleta.
 
     Returns:
-        String con saludo personalizado
+        String amb salutació personalitzada
     """
     greetings = []
 
-    # Verificar última actividad
+    # Verificar última activitat
     try:
         recent = ai_functions.get_recent_activities(days=1)
         if recent['count'] > 0:
-            greetings.append("¡Veo que has entrenado hoy! 💪")
+            greetings.append("Veig que has entrenat avui! 💪")
         else:
             recent_week = ai_functions.get_recent_activities(days=7)
             if recent_week['count'] == 0:
-                greetings.append("¿Cómo va todo? Hace unos días que no te veo entrenar.")
+                greetings.append("Com va tot? Fa uns dies que no et veig entrenar.")
             else:
-                greetings.append(f"¡Hola! Llevas {recent_week['count']} entrenos esta semana.")
+                greetings.append(f"Hola! Portes {recent_week['count']} entrenaments aquesta setmana.")
     except:
-        greetings.append("¡Hola! ¿En qué puedo ayudarte hoy?")
+        greetings.append("Hola! En què et puc ajudar avui?")
 
-    # Verificar plan pendiente
+    # Verificar pla pendent
     try:
         plan = ai_functions.get_current_plan()
         if plan['plan'] and plan['workouts']:
             pending = sum(1 for w in plan['workouts'] if w['status'] == 'pending')
             if pending > 0:
-                greetings.append(f"Tienes {pending} entrenos pendientes en tu plan.")
+                greetings.append(f"Tens {pending} entrenaments pendents al teu pla.")
     except:
         pass
 
-    return " ".join(greetings) if greetings else "¡Hola! Estoy aquí para ayudarte con tu entrenamiento."
+    return " ".join(greetings) if greetings else "Hola! Estic aquí per ajudar-te amb el teu entrenament."
 
 
 def save_context_snapshot(summary: str):
     """
-    Guarda un snapshot del contexto en la base de datos.
+    Guarda un snapshot del context a la base de dades.
 
     Args:
-        summary: Resumen del contexto a guardar
+        summary: Resum del context a guardar
     """
     conn = get_connection()
     cur = conn.cursor()
@@ -265,13 +265,13 @@ def save_context_snapshot(summary: str):
 
 def get_relevant_activities_for_planning(weeks_back: int = 4) -> Dict:
     """
-    Obtiene información relevante de actividades para planificación.
+    Obté informació rellevant d'activitats per planificació.
 
     Args:
-        weeks_back: Semanas hacia atrás para analizar
+        weeks_back: Setmanes enrere per analitzar
 
     Returns:
-        Diccionario con métricas y recomendaciones
+        Diccionari amb mètriques i recomanacions
     """
     try:
         stats = ai_functions.get_weekly_stats(weeks=weeks_back)
@@ -285,13 +285,13 @@ def get_relevant_activities_for_planning(weeks_back: int = 4) -> Dict:
             "recommendation": ""
         }
 
-        # Generar recomendación simple
+        # Generar recomanació simple
         if analysis['avg_weekly_km'] < 20:
-            analysis['recommendation'] = "Volumen bajo: enfócate en construir base aeróbica"
+            analysis['recommendation'] = "Volum baix: centra't en construir base aeròbica"
         elif analysis['avg_weekly_km'] < 40:
-            analysis['recommendation'] = "Volumen moderado: buen momento para añadir calidad"
+            analysis['recommendation'] = "Volum moderat: bon moment per afegir qualitat"
         else:
-            analysis['recommendation'] = "Volumen alto: mantén equilibrio entre volumen y recuperación"
+            analysis['recommendation'] = "Volum alt: mantén equilibri entre volum i recuperació"
 
         return analysis
     except Exception as e:
@@ -300,10 +300,10 @@ def get_relevant_activities_for_planning(weeks_back: int = 4) -> Dict:
 
 def check_training_load_progression() -> Dict:
     """
-    Analiza la progresión de carga de entrenamiento para prevenir sobreentrenamiento.
+    Analitza la progressió de càrrega d'entrenament per prevenir sobreentrenament.
 
     Returns:
-        Diccionario con análisis de carga
+        Diccionari amb anàlisi de càrrega
     """
     try:
         stats = ai_functions.get_weekly_stats(weeks=4)
@@ -322,10 +322,10 @@ def check_training_load_progression() -> Dict:
 
         if increase_pct > 15:
             status = "warning"
-            warning = f"Aumento de volumen del {increase_pct:.1f}%. Recomendado: máximo 10-15% semanal."
+            warning = f"Augment de volum del {increase_pct:.1f}%. Recomanat: màxim 10-15% setmanal."
         elif increase_pct < -20:
             status = "low"
-            warning = f"Reducción de volumen del {abs(increase_pct):.1f}%. ¿Semana de descarga?"
+            warning = f"Reducció de volum del {abs(increase_pct):.1f}%. Setmana de descàrrega?"
 
         return {
             "status": status,

@@ -14,35 +14,36 @@ from utils.planning import (
     reset_workout_to_pending, delete_workout, update_workout
 )
 from utils.formatting import format_time, format_pace
+from i18n import t, WORKOUT_TYPES_DISPLAY, DAY_NAMES_ES_TO_CA
 
 st.set_page_config(layout="wide")
-st.title("📅 Planificación de Entrenamientos")
+st.title(t("planning_title"))
 
 # Tabs para organizar la información
-tab1, tab2 = st.tabs(["📆 Calendario", "🔗 Vincular Actividades"])
+tab1, tab2 = st.tabs([t("calendar_tab"), t("link_activities_tab")])
 
 with tab1:
-    st.header("Entrenamientos Planificados")
+    st.header(t("planned_workouts"))
 
     # Controles de rango de fechas
     col_past, col_future = st.columns(2)
     with col_past:
-        past_weeks = st.number_input("Semanas pasadas:", min_value=0, max_value=12, value=1, key="past_weeks")
+        past_weeks = st.number_input(t("weeks_past"), min_value=0, max_value=12, value=1, key="past_weeks")
     with col_future:
-        future_weeks = st.number_input("Semanas futuras:", min_value=1, max_value=12, value=4, key="future_weeks")
+        future_weeks = st.number_input(t("weeks_future"), min_value=1, max_value=12, value=4, key="future_weeks")
 
     # Obtener entrenamientos planificados en el rango
     upcoming = get_upcoming_workouts(weeks=future_weeks, include_past_weeks=past_weeks)
 
     if upcoming.empty:
-        st.info("No hay entrenamientos planificados. Ve a la página del Coach IA para crear un plan.")
+        st.info(t("no_planned_workouts"))
     else:
         # Agrupar por semana
         upcoming['date'] = pd.to_datetime(upcoming['date'])
         upcoming['week'] = upcoming['date'].dt.to_period('W').astype(str)
 
         for week, week_workouts in upcoming.groupby('week'):
-            st.subheader(f"Semana {week}")
+            st.subheader(t("week_label", week=week))
 
             # Mostrar entrenamientos de la semana en columnas
             cols = st.columns(len(week_workouts))
@@ -60,39 +61,43 @@ with tab1:
                         status_emoji = "⏳"
                         status_color = "blue"
 
-                    # Card del entrenamiento
-                    st.markdown(f"**{status_emoji} {workout['date'].strftime('%A, %d %b')}**")
+                    # Card del entrenamiento - formato de fecha en Catalan
+                    day_name_en = workout['date'].strftime('%A')
+                    day_name_ca = DAY_NAMES_ES_TO_CA.get(day_name_en, day_name_en)
+                    st.markdown(f"**{status_emoji} {day_name_ca}, {workout['date'].strftime('%d %b')}**")
 
-                    workout_type = workout['workout_type'] or 'Rodaje'
-                    st.markdown(f"**Tipo:** {workout_type.title()}")
-                    st.markdown(f"**Distancia:** {workout['distance_km']:.1f} km")
+                    # Mostrar tipo de entreno usando el diccionario de display
+                    workout_type = workout['workout_type'] or 'easy_run'
+                    workout_type_display = WORKOUT_TYPES_DISPLAY.get(workout_type, workout_type.replace('_', ' ').title())
+                    st.markdown(f"**{t('type_label')}** {workout_type_display}")
+                    st.markdown(f"**{t('distance_label')}** {workout['distance_km']:.1f} km")
 
                     if workout['pace_objective']:
-                        st.markdown(f"**Ritmo objetivo:** {workout['pace_objective']}")
+                        st.markdown(f"**{t('pace_objective_label')}** {workout['pace_objective']}")
 
                     if workout['description']:
                         st.markdown(f"_{workout['description']}_")
 
                     # Si está completado, mostrar info de la actividad
                     if workout['status'] == 'completed' and workout['activity_name']:
-                        st.success(f"Completado: {workout['activity_name']}")
+                        st.success(t("completed_activity", name=workout['activity_name']))
                         if pd.notna(workout['activity_distance_km']):
-                            st.caption(f"Distancia real: {workout['activity_distance_km']:.2f} km")
+                            st.caption(t("actual_distance", km=workout['activity_distance_km']))
 
                     # Botones de acción según estado
                     if workout['status'] == 'pending':
                         col_a, col_b = st.columns(2)
                         with col_a:
-                            if st.button("✅ Marcar completado", key=f"complete_{workout['id']}"):
+                            if st.button(t("mark_completed"), key=f"complete_{workout['id']}"):
                                 update_workout_status(workout['id'], 'completed')
                                 st.rerun()
                         with col_b:
-                            if st.button("⏭️ Saltar", key=f"skip_{workout['id']}"):
+                            if st.button(t("skip_workout"), key=f"skip_{workout['id']}"):
                                 update_workout_status(workout['id'], 'skipped')
                                 st.rerun()
                     elif workout['status'] in ['completed', 'skipped']:
                         # Opción para desmarcar y volver a pending
-                        if st.button("🔄 Desmarcar (volver a pendiente)", key=f"reset_{workout['id']}", type="secondary"):
+                        if st.button(t("unmark_pending"), key=f"reset_{workout['id']}", type="secondary"):
                             reset_workout_to_pending(workout['id'])
                             st.rerun()
 
@@ -102,7 +107,7 @@ with tab1:
 
                     with col_edit:
                         edit_key = f"edit_{workout['id']}"
-                        if st.button("✏️ Editar", key=edit_key, use_container_width=True):
+                        if st.button(t("edit_workout"), key=edit_key, use_container_width=True):
                             if f"editing_{workout['id']}" not in st.session_state:
                                 st.session_state[f"editing_{workout['id']}"] = True
                             else:
@@ -111,7 +116,7 @@ with tab1:
 
                     with col_delete:
                         delete_key = f"delete_{workout['id']}"
-                        if st.button("🗑️ Eliminar", key=delete_key, use_container_width=True, type="secondary"):
+                        if st.button(t("delete_workout_button"), key=delete_key, use_container_width=True, type="secondary"):
                             if f"confirm_delete_{workout['id']}" not in st.session_state:
                                 st.session_state[f"confirm_delete_{workout['id']}"] = True
                             else:
@@ -120,41 +125,47 @@ with tab1:
 
                     # Confirmación de eliminación
                     if st.session_state.get(f"confirm_delete_{workout['id']}", False):
-                        st.warning("⚠️ ¿Confirmas que quieres eliminar este entreno?")
+                        st.warning(t("confirm_delete_workout"))
                         col_yes, col_no = st.columns(2)
                         with col_yes:
-                            if st.button("✅ Sí, eliminar", key=f"confirm_yes_{workout['id']}", type="primary"):
+                            if st.button(t("yes_delete"), key=f"confirm_yes_{workout['id']}", type="primary"):
                                 delete_workout(workout['id'])
                                 st.session_state[f"confirm_delete_{workout['id']}"] = False
-                                st.success("Entreno eliminado")
+                                st.success(t("workout_deleted"))
                                 st.rerun()
                         with col_no:
-                            if st.button("❌ Cancelar", key=f"confirm_no_{workout['id']}"):
+                            if st.button(t("cancel"), key=f"confirm_no_{workout['id']}"):
                                 st.session_state[f"confirm_delete_{workout['id']}"] = False
                                 st.rerun()
 
                     # Formulario de edición
                     if st.session_state.get(f"editing_{workout['id']}", False):
                         with st.form(key=f"edit_form_{workout['id']}"):
-                            st.markdown("**Editar entreno:**")
+                            st.markdown(t("edit_workout_title"))
 
                             new_date = st.date_input(
-                                "Fecha:",
+                                t("date_label"),
                                 value=pd.to_datetime(workout['date']).date(),
                                 key=f"new_date_{workout['id']}"
                             )
 
-                            workout_types = ['rodaje', 'calidad', 'tirada_larga', 'recuperacion', 'tempo', 'series']
+                            # Workout types en inglés (database values)
+                            workout_types = ['easy_run', 'quality', 'long_run', 'recovery', 'tempo', 'intervals']
                             current_type_idx = workout_types.index(workout['workout_type']) if workout['workout_type'] in workout_types else 0
+
+                            # Crear opciones de display en Catalan
+                            workout_type_options = {wt: WORKOUT_TYPES_DISPLAY.get(wt, wt) for wt in workout_types}
+
                             new_type = st.selectbox(
-                                "Tipo:",
+                                t("type_label"),
                                 options=workout_types,
+                                format_func=lambda x: workout_type_options[x],
                                 index=current_type_idx,
                                 key=f"new_type_{workout['id']}"
                             )
 
                             new_distance = st.number_input(
-                                "Distancia (km):",
+                                t("distance_label") + " (km):",
                                 min_value=0.5,
                                 max_value=50.0,
                                 value=float(workout['distance_km']),
@@ -163,29 +174,29 @@ with tab1:
                             )
 
                             new_pace = st.text_input(
-                                "Ritmo objetivo:",
+                                t("pace_objective_label"),
                                 value=workout['pace_objective'] or "",
-                                placeholder="ej: 5:00 o 5:00-5:15",
+                                placeholder=t("example_pace"),
                                 key=f"new_pace_{workout['id']}"
                             )
 
                             new_description = st.text_area(
-                                "Descripción:",
+                                t("description_label"),
                                 value=workout['description'] or "",
                                 key=f"new_description_{workout['id']}"
                             )
 
                             new_notes = st.text_area(
-                                "Notas:",
+                                t("notes_label"),
                                 value=workout['notes'] or "",
                                 key=f"new_notes_{workout['id']}"
                             )
 
                             col_save, col_cancel = st.columns(2)
                             with col_save:
-                                save_button = st.form_submit_button("💾 Guardar cambios", use_container_width=True)
+                                save_button = st.form_submit_button(t("save_changes"), use_container_width=True)
                             with col_cancel:
-                                cancel_button = st.form_submit_button("❌ Cancelar", use_container_width=True)
+                                cancel_button = st.form_submit_button(t("cancel"), use_container_width=True)
 
                             if save_button:
                                 update_workout(
@@ -198,7 +209,7 @@ with tab1:
                                     notes=new_notes if new_notes else None
                                 )
                                 st.session_state[f"editing_{workout['id']}"] = False
-                                st.success("✅ Cambios guardados")
+                                st.success(t("changes_saved"))
                                 st.rerun()
 
                             if cancel_button:
@@ -208,28 +219,28 @@ with tab1:
                     st.divider()
 
 with tab2:
-    st.header("🔗 Vincular Actividades de Strava")
-    st.markdown("Conecta tus actividades de Strava con los entrenamientos planificados.")
+    st.header(t("link_strava_activities"))
+    st.markdown(t("link_strava_desc"))
 
     # Actividades recientes sin vincular
     unlinked = get_unlinked_activities(days=14)
 
     if unlinked.empty:
-        st.success("¡Todas las actividades recientes están vinculadas!")
+        st.success(t("all_activities_linked"))
     else:
-        st.subheader("Actividades sin vincular (últimos 14 días)")
+        st.subheader(t("unlinked_activities"))
 
         for _, activity in unlinked.iterrows():
             with st.expander(f"🏃 {activity['name']} - {pd.to_datetime(activity['start_date_local']).strftime('%d/%m/%Y')}"):
                 col1, col2 = st.columns([2, 1])
 
                 with col1:
-                    st.markdown(f"**Fecha:** {pd.to_datetime(activity['start_date_local']).strftime('%d/%m/%Y %H:%M')}")
-                    st.markdown(f"**Distancia:** {activity['distance']/1000:.2f} km")
-                    st.markdown(f"**Tiempo:** {format_time(activity['moving_time'])}")
+                    st.markdown(t("date_time_label") + f" {pd.to_datetime(activity['start_date_local']).strftime('%d/%m/%Y %H:%M')}")
+                    st.markdown(f"**{t('distance_label')}** {activity['distance']/1000:.2f} km")
+                    st.markdown(t("time_label") + f" {format_time(activity['moving_time'])}")
 
                     if pd.notna(activity['description']):
-                        st.caption(f"Descripción: {activity['description']}")
+                        st.caption(f"{t('description_label')} {activity['description']}")
 
                 with col2:
                     # Obtener entrenamientos pendientes cercanos
@@ -248,40 +259,40 @@ with tab2:
                         ]
 
                         if not nearby_workouts.empty:
-                            workout_options = {
-                                f"{row['date'].strftime('%d/%m')} - {row['workout_type']} - {row['distance_km']:.1f} km": row['id']
-                                for _, row in nearby_workouts.iterrows()
-                            }
+                            workout_options = {}
+                            for _, row in nearby_workouts.iterrows():
+                                workout_type_display = WORKOUT_TYPES_DISPLAY.get(row['workout_type'], row['workout_type'])
+                                workout_options[f"{row['date'].strftime('%d/%m')} - {workout_type_display} - {row['distance_km']:.1f} km"] = row['id']
 
                             selected_workout = st.selectbox(
-                                "Vincular con:",
+                                t("link_with"),
                                 options=list(workout_options.keys()),
                                 key=f"link_{activity['id']}"
                             )
 
-                            if st.button("Vincular", key=f"btn_link_{activity['id']}"):
+                            if st.button(t("link_button"), key=f"btn_link_{activity['id']}"):
                                 workout_id = workout_options[selected_workout]
                                 link_activity_to_workout(workout_id, activity['id'])
-                                st.success("¡Actividad vinculada!")
+                                st.success(t("activity_linked"))
                                 st.rerun()
                         else:
-                            st.info("No hay entrenamientos pendientes cercanos a esta fecha.")
+                            st.info(t("no_pending_workouts_near"))
 
 
 # Información adicional en sidebar
 with st.sidebar:
-    st.markdown("### 📊 Resumen")
+    st.markdown(t("summary_sidebar"))
 
     # Plan actual
     current_plan = get_current_plan()
     if current_plan:
-        st.success("Plan activo")
-        st.caption(f"Semana: {current_plan['week_start_date']}")
+        st.success(t("active_plan"))
+        st.caption(t("week_start", date=current_plan['week_start_date']))
         if current_plan['goal']:
-            st.caption(f"Objetivo: {current_plan['goal']}")
+            st.caption(t("objective_label", goal=current_plan['goal']))
     else:
-        st.warning("Sin plan activo")
-        st.caption("Crea uno en la página del Coach IA")
+        st.warning(t("no_active_plan"))
+        st.caption(t("create_plan_in_coach"))
 
     st.divider()
 
@@ -301,6 +312,6 @@ with st.sidebar:
 
         # Label dinámico basado en el rango seleccionado
         range_label = f"-{stat_past}sem, +{stat_future}sem" if stat_past > 0 else f"{stat_future} sem"
-        st.metric(f"Total planificados ({range_label})", total_workouts)
-        st.metric("Completados", completed)
-        st.metric("Pendientes", pending)
+        st.metric(t("total_planned", label=range_label), total_workouts)
+        st.metric(t("completed_workouts"), completed)
+        st.metric(t("pending_workouts"), pending)

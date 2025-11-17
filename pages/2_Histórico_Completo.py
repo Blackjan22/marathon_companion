@@ -3,12 +3,13 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-# Importar utilidades
+# Importar utilitats
 from plotly.subplots import make_subplots
 from utils.data_processing import load_data
 from utils.formatting import format_time, format_pace
+from i18n import t
 
-st.set_page_config(page_title="Histórico Completo", page_icon="📋", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title=t("history_title"), page_icon="📋", layout="wide", initial_sidebar_state="expanded")
 
 # Cargar datos (actividades, splits y (opcional) laps)
 _result = load_data()
@@ -29,10 +30,10 @@ else:
     splits = pd.DataFrame()
     laps = pd.DataFrame()
 
-st.title("📋 Histórico Completo de Actividades")
+st.title(t("history_title"))
 
 if activities.empty:
-    st.warning("No hay datos de carreras disponibles.")
+    st.warning(t("no_data_warning"))
     st.stop()
 
 # --- PREPARAR DATOS PARA MOSTRAR ---
@@ -57,48 +58,48 @@ display_data['Ritmo (min/km)'] = display_data['pace_min_km'].apply(format_pace)
 display_data['FC Promedio'] = display_data['average_heartrate'].fillna(0).round(0).astype(int).astype(str).replace('0', 'N/A')
 display_data['Desnivel (m)'] = display_data['total_elevation_gain'].fillna(0).round(0).astype(int)
 
-# --- FILTROS EN EL CUERPO DE LA PÁGINA ---
-st.header("Filtrar Histórico")
+# --- FILTRES AL COS DE LA PÀGINA ---
+st.header(t("history_filters"))
 col1, col2, col3 = st.columns(3)
 with col1:
-    sport_types = ['Todos'] + list(display_data['sport_type'].unique())
-    selected_sport = st.selectbox("Tipo de deporte:", sport_types)
+    sport_types = [t("all_sports")] + list(display_data['sport_type'].unique())
+    selected_sport = st.selectbox(t("sport_type"), sport_types)
 with col2:
-    min_dist_filter = st.number_input("Distancia mínima (km):", min_value=0.0, value=0.0, step=0.5)
+    min_dist_filter = st.number_input(t("min_distance"), min_value=0.0, value=0.0, step=0.5)
 with col3:
-    max_dist_filter = st.number_input("Distancia máxima (km):", min_value=0.0, value=float(display_data['distance_km'].max()), step=1.0)
+    max_dist_filter = st.number_input("Distància màxima (km):", min_value=0.0, value=float(display_data['distance_km'].max()), step=1.0)
 
-# Aplicar filtros
+# Aplicar filtres
 display_filtered = display_data.copy()
-if selected_sport != 'Todos':
+if selected_sport != t("all_sports"):
     display_filtered = display_filtered[display_filtered['sport_type'] == selected_sport]
 mask_distance = (display_filtered['distance_km'] >= min_dist_filter) & (display_filtered['distance_km'] <= max_dist_filter)
 display_filtered = display_filtered[mask_distance]
 
-st.header("Resultados")
+st.header("Resultats")
 if display_filtered.empty:
-    st.warning("No hay actividades que coincidan con los filtros.")
+    st.warning("No hi ha activitats que coincideixin amb els filtres.")
     st.stop()
 
-# Mostrar estadísticas resumidas de los datos filtrados (añado desnivel total)
+# Mostrar estadístiques resumides de les dades filtrades
 col1, col2, col3, col4, col5 = st.columns(5)
 with col1:
-    st.metric("Actividades Filtradas", len(display_filtered))
+    st.metric("Activitats Filtrades", len(display_filtered))
 with col2:
-    st.metric("Total Kilómetros", f"{display_filtered['distance_km'].sum():.1f}")
+    st.metric(t("total_km"), f"{display_filtered['distance_km'].sum():.1f}")
 with col3:
-    st.metric("Tiempo Total", format_time(display_filtered['moving_time'].sum()))
+    st.metric("Temps Total", format_time(display_filtered['moving_time'].sum()))
 with col4:
-    st.metric("Ritmo Promedio", format_pace(display_filtered['pace_min_km'].mean()))
+    st.metric(t("avg_pace"), format_pace(display_filtered['pace_min_km'].mean()))
 with col5:
-    st.metric("Desnivel total (m)", int(display_filtered['total_elevation_gain'].fillna(0).sum()))
+    st.metric(t("elevation"), int(display_filtered['total_elevation_gain'].fillna(0).sum()))
 
-# --- TABLA INTERACTIVA ---
+# --- TAULA INTERACTIVA ---
 columns_to_show = [
     'Fecha', 'name', 'Distancia (km)', 'Tiempo', 'Ritmo (min/km)',
     'FC Promedio', 'Desnivel (m)', 'sport_type', 'Notas'
 ]
-column_names = {'name': 'Actividad', 'sport_type': 'Tipo'}
+column_names = {'name': t('activity_name'), 'sport_type': 'Tipus'}
 st.dataframe(
     display_filtered[columns_to_show].rename(columns=column_names),
     use_container_width=True,
@@ -107,13 +108,13 @@ st.dataframe(
 )
 
 # =====================
-#   ANÁLISIS DE LAPS
+#   ANÀLISI DE LAPS
 # =====================
 st.divider()
-st.subheader("⏱️ Análisis de Laps")
+st.subheader(t("laps_analysis"))
 
 if laps.empty:
-    st.warning("No hay datos de laps disponibles en tu base de datos.")
+    st.warning(t("no_laps"))
     st.stop()
 
 # Limitar selección a actividades filtradas arriba
@@ -123,7 +124,7 @@ activity_options = activities[activities['id'].isin(filtered_ids)][
 ].copy()
 
 if activity_options.empty:
-    st.info("Ajusta los filtros para seleccionar una actividad.")
+    st.info("Ajusta els filtres per seleccionar una activitat.")
     st.stop()
 
 activity_options['display'] = activity_options.apply(
@@ -131,7 +132,7 @@ activity_options['display'] = activity_options.apply(
     axis=1
 )
 selected_activity_id = st.selectbox(
-    "Elige una carrera para analizar sus laps:",
+    "Tria una cursa per analitzar les seves voltes:",
     options=activity_options['id'],
     format_func=lambda x: activity_options[activity_options['id'] == x]['display'].iloc[0]
 )
@@ -139,29 +140,29 @@ selected_activity_id = st.selectbox(
 activity_laps = laps[laps['activity_id'] == selected_activity_id].copy()
 activity_info = activities[activities['id'] == selected_activity_id].iloc[0]
 
-# Métricas principales (incluye desnivel total)
+# Mètriques principals
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    st.metric("Distancia Total", f"{activity_info['distance_km']:.2f} km")
+    st.metric("Distància Total", f"{activity_info['distance_km']:.2f} km")
 with col2:
-    st.metric("Tiempo Total", format_time(activity_info['moving_time']))
+    st.metric("Temps Total", format_time(activity_info['moving_time']))
 with col3:
-    st.metric("Ritmo Promedio", format_pace(activity_info['pace_min_km']))
+    st.metric(t("avg_pace"), format_pace(activity_info['pace_min_km']))
 with col4:
-    st.metric("Desnivel Total (m)", int((activity_info.get('total_elevation_gain') or 0)))
+    st.metric("Desnivell Total (m)", int((activity_info.get('total_elevation_gain') or 0)))
 
-# Comentarios de la actividad seleccionada
+# Comentaris de l'activitat seleccionada
 comentarios = _combine_comments(
     activity_info['description'] if 'description' in activity_info else None,
     activity_info['private_note'] if 'private_note' in activity_info else None
 )
 if comentarios:
-    st.markdown(f"**Notas:** {comentarios}")
+    st.markdown(f"**Notes:** {comentarios}")
 
-# Gráficos y detalle
+# Gràfics i detall
 if not activity_laps.empty:
 
-    st.subheader("Ritmo y Desnivel por Lap")
+    st.subheader(t("lap_pace_chart"))
 
     # ----- Preparar series -----
     def _get_lap_no(df: pd.DataFrame) -> pd.Series:
@@ -221,13 +222,13 @@ if not activity_laps.empty:
             line=dict(width=2, dash="dot"),
             marker=dict(size=6),
             hovertemplate="Lap: %{x}<br>Ritmo: %{text}<extra></extra>",
-            text=[format_pace(p) if p is not None else "N/A" for p in pace],
+            text=[format_pace(p) if p is not None else t("not_available") for p in pace],
             connectgaps=False
         ),
         secondary_y=True
     )
 
-    # Línea media de ritmo (sobre y2) si hay datos válidos
+    # Línia mitjana de ritme (sobre y2) si hi ha dades vàlides
     pace_series = pd.Series([p for p in pace if p is not None])
     if not pace_series.empty:
         avg_pace = float(pace_series.mean())
@@ -241,7 +242,7 @@ if not activity_laps.empty:
         fig.add_annotation(
             x=1.0, xref="paper",
             y=avg_pace, yref="y2",
-            text=f"Ritmo medio: {format_pace(avg_pace)}",
+            text=f"Ritme mitjà: {format_pace(avg_pace)}",
             showarrow=False, xanchor="left", yanchor="bottom", xshift=8
         )
         y2_min, y2_max = float(pace_series.min()), float(pace_series.max())
@@ -272,27 +273,27 @@ if not activity_laps.empty:
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # ----- Tabla de detalle de laps -----
-    st.subheader("Detalle de Laps")
+    # ----- Taula de detall de laps -----
+    st.subheader("Detall de Voltes")
 
     laps_display = activity_laps.copy()
-    laps_display['Ritmo'] = [format_pace(p) if p is not None else "N/A" for p in pace]
+    laps_display['Ritme'] = [format_pace(p) if p is not None else t("not_available") for p in pace]
 
     if 'moving_time' in laps_display.columns:
-        laps_display['Tiempo (mov)'] = laps_display['moving_time'].apply(format_time)
+        laps_display['Temps (mov)'] = laps_display['moving_time'].apply(format_time)
     if 'elapsed_time' in laps_display.columns:
-        laps_display['Tiempo (total)'] = laps_display['elapsed_time'].apply(format_time)
+        laps_display['Temps (total)'] = laps_display['elapsed_time'].apply(format_time)
     if 'distance' in laps_display.columns:
-        laps_display['Distancia (m)'] = laps_display['distance'].round(0)
+        laps_display['Distància (m)'] = laps_display['distance'].round(0)
     if 'total_elevation_gain' in laps_display.columns:
-        laps_display['Desnivel (m)'] = laps_display['total_elevation_gain'].fillna(0).round(0).astype(int)
+        laps_display['Desnivell (m)'] = laps_display['total_elevation_gain'].fillna(0).round(0).astype(int)
     if 'average_heartrate' in laps_display.columns:
-        laps_display['FC Prom.'] = laps_display['average_heartrate'].fillna(0).round(0).astype(int).astype(str).replace('0', 'N/A')
+        laps_display['FC Prom.'] = laps_display['average_heartrate'].fillna(0).round(0).astype(int).astype(str).replace('0', t("not_available"))
     if 'average_cadence' in laps_display.columns:
-        # Algunas APIs devuelven cadencia en pasos/min (running) o rpm (ciclismo)
-        laps_display['Cadencia'] = laps_display['average_cadence'].round(0).astype('Int64').astype(str)
+        # Algunes APIs retornen cadència en passos/min (running) o rpm (ciclisme)
+        laps_display['Cadència'] = laps_display['average_cadence'].round(0).astype('Int64').astype(str)
 
-    # Columna de índice de lap
+    # Columna d'índex de lap
     if 'lap_index' in laps_display.columns:
         idx_col = 'lap_index'
     elif 'split' in laps_display.columns:
@@ -301,12 +302,12 @@ if not activity_laps.empty:
         idx_col = '_lap_tmp_index'
         laps_display[idx_col] = range(1, len(laps_display) + 1)
 
-    cols = [idx_col] + [c for c in ['Distancia (m)', 'Tiempo (mov)', 'Tiempo (total)', 'Ritmo', 'Desnivel (m)', 'FC Prom.', 'Cadencia'] if c in laps_display.columns]
+    cols = [idx_col] + [c for c in ['Distància (m)', 'Temps (mov)', 'Temps (total)', 'Ritme', 'Desnivell (m)', 'FC Prom.', 'Cadència'] if c in laps_display.columns]
 
     st.dataframe(
-        laps_display[cols].rename(columns={idx_col: 'Lap #'}),
+        laps_display[cols].rename(columns={idx_col: 'Volta #'}),
         use_container_width=True,
         hide_index=True
     )
 else:
-    st.info("Esta actividad no tiene datos de laps disponibles.")
+    st.info("Aquesta activitat no té dades de voltes disponibles.")
