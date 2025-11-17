@@ -8,8 +8,16 @@ from plotly.subplots import make_subplots
 from utils.data_processing import load_data
 from utils.formatting import format_time, format_pace
 from i18n import t
+from auth import check_password, add_logout_button
 
 st.set_page_config(page_title=t("history_title"), page_icon="📋", layout="wide", initial_sidebar_state="expanded")
+
+# Verificar autenticació
+if not check_password():
+    st.stop()
+
+# Afegir botó de logout a la sidebar
+add_logout_button()
 
 # Cargar datos (actividades, splits y (opcional) laps)
 _result = load_data()

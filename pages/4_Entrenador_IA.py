@@ -4,6 +4,7 @@ import os
 import sys
 from datetime import datetime
 from i18n import t
+from auth import check_password, add_logout_button
 
 # Configurar certificado SSL ANTES de importar genai (para VPN corporativa)
 proxy_cert = os.path.expanduser("~/Credentials/rootcaCert.pem")
@@ -73,6 +74,14 @@ from utils import gemini_tools
 from utils.db_config import get_connection
 
 st.set_page_config(layout="wide")
+
+# Verificar autenticació
+if not check_password():
+    st.stop()
+
+# Afegir botó de logout a la sidebar
+add_logout_button()
+
 st.title(t("coach_title"))
 st.markdown(t("coach_subtitle"))
 

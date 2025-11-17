@@ -9,15 +9,23 @@ from datetime import datetime, timedelta
 from utils.data_processing import load_data, get_timezone_aware_datetime
 from utils.formatting import format_time, format_pace
 from i18n import t, DAY_NAMES_ES_TO_CA, DAY_NAMES_SHORT, TRAINING_ZONES_CA
+from auth import check_password, add_logout_button
+
+st.set_page_config(
+    layout="wide"
+)
+
+# Verificar autenticació
+if not check_password():
+    st.stop()
+
+# Afegir botó de logout a la sidebar
+add_logout_button()
 
 # Carregar dades (utilitzarà la caché)
 activities, splits = load_data()
 
 st.title(t("dashboard_title"))
-
-st.set_page_config(
-    layout="wide"
-)
 
 if activities.empty:
     st.warning(t("no_data_warning"))

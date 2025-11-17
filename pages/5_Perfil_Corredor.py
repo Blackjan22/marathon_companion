@@ -9,8 +9,17 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from utils.db_config import get_connection
 from i18n import t
+from auth import check_password, add_logout_button
 
 st.set_page_config(layout="wide")
+
+# Verificar autenticació
+if not check_password():
+    st.stop()
+
+# Afegir botó de logout a la sidebar
+add_logout_button()
+
 st.title(t("profile_title"))
 
 st.markdown(t("profile_description"))

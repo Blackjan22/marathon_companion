@@ -15,8 +15,17 @@ from utils.planning import (
 )
 from utils.formatting import format_time, format_pace
 from i18n import t, WORKOUT_TYPES_DISPLAY, DAY_NAMES_ES_TO_CA
+from auth import check_password, add_logout_button
 
 st.set_page_config(layout="wide")
+
+# Verificar autenticació
+if not check_password():
+    st.stop()
+
+# Afegir botó de logout a la sidebar
+add_logout_button()
+
 st.title(t("planning_title"))
 
 # Tabs para organizar la información
