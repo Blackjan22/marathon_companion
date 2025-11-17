@@ -170,6 +170,16 @@ def get_connection():
 
     if db_url and POSTGRES_AVAILABLE:
         # Producción: PostgreSQL (Supabase)
+        # IMPORTANTE: Forzar SSL si la URL no lo especifica
+        # Supabase requiere SSL para conexiones externas
+        if '?' not in db_url:
+            # No hay query params, añadir sslmode=require
+            db_url = f"{db_url}?sslmode=require"
+        elif 'sslmode' not in db_url:
+            # Hay query params pero no sslmode, añadirlo
+            db_url = f"{db_url}&sslmode=require"
+
+        print(f"[DB_CONFIG] Connecting to PostgreSQL with SSL (URL length: {len(db_url)})")
         conn = psycopg2.connect(db_url)
         return ConnectionWrapper(conn, is_postgres=True)
     else:
