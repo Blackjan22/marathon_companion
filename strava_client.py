@@ -14,7 +14,11 @@ load_dotenv(override=True)
 CLIENT_ID = os.getenv("STRAVA_CLIENT_ID")
 CLIENT_SECRET = os.getenv("STRAVA_CLIENT_SECRET")
 REFRESH_TOKEN = os.getenv("STRAVA_REFRESH_TOKEN")
-PROXY_CERT = os.path.expanduser("~/Credentials/rootcaCert.pem")
+
+# Certificado proxy: solo usarlo si existe (entorno local)
+# En Cloud, usar verificación SSL estándar
+PROXY_CERT_PATH = os.path.expanduser("~/Credentials/rootcaCert.pem")
+PROXY_CERT = PROXY_CERT_PATH if os.path.exists(PROXY_CERT_PATH) else True
 
 
 def get_access_token():
