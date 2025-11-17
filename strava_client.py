@@ -11,9 +11,18 @@ from utils.db_config import get_connection, is_postgres
 
 load_dotenv(override=True)
 
-CLIENT_ID = os.getenv("STRAVA_CLIENT_ID")
-CLIENT_SECRET = os.getenv("STRAVA_CLIENT_SECRET")
-REFRESH_TOKEN = os.getenv("STRAVA_REFRESH_TOKEN")
+# Función para leer secrets desde Streamlit o variables de entorno
+def get_secret(key):
+    """Lee un secret desde st.secrets (Cloud) o variables de entorno (local)"""
+    try:
+        import streamlit as st
+        return st.secrets.get(key)
+    except:
+        return os.getenv(key)
+
+CLIENT_ID = get_secret("STRAVA_CLIENT_ID")
+CLIENT_SECRET = get_secret("STRAVA_CLIENT_SECRET")
+REFRESH_TOKEN = get_secret("STRAVA_REFRESH_TOKEN")
 
 # Certificado proxy: solo usarlo si existe (entorno local)
 # En Cloud, usar verificación SSL estándar

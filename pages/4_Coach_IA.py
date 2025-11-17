@@ -86,10 +86,14 @@ if "messages" not in st.session_state:
         st.session_state.messages.append({"role": "assistant", "content": welcome_message})
 
 if "gemini_configured" not in st.session_state:
-    # Verificar API key
-    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    # Verificar API key (primero en st.secrets, luego en variables de entorno)
+    try:
+        gemini_api_key = st.secrets.get("GEMINI_API_KEY")
+    except:
+        gemini_api_key = os.getenv("GEMINI_API_KEY")
+
     if not gemini_api_key:
-        st.error("⚠️ No se encontró la API key de Gemini. Por favor, añade GEMINI_API_KEY a tu archivo .env")
+        st.error("⚠️ No se encontró la API key de Gemini. Por favor, añade GEMINI_API_KEY a tu archivo .env o secrets")
         st.info("La API key debe empezar con 'AIza...'")
         st.stop()
 
