@@ -1,22 +1,22 @@
 # utils/gemini_tools.py
 """
-Declaraciones de herramientas (tools) para Gemini Function Calling.
-Define el schema de cada función que el modelo puede invocar.
+Declaracions d'eines (tools) per Gemini Function Calling.
+Defineix l'esquema de cada funció que el model pot invocar.
 """
 
 from google.generativeai.types import FunctionDeclaration, Tool
 
 
-# Declaración de herramientas individuales
+# Declaració d'eines individuals
 get_recent_activities_declaration = FunctionDeclaration(
     name="get_recent_activities",
-    description="Obtiene las actividades de running de los últimos N días con sus estadísticas (distancia, ritmo, etc.)",
+    description="Obté les activitats de running dels últims N dies amb les seves estadístiques (distància, ritme, etc.)",
     parameters={
         "type": "object",
         "properties": {
             "days": {
                 "type": "integer",
-                "description": "Número de días hacia atrás para buscar actividades. Por defecto 7 días."
+                "description": "Nombre de dies enrere per buscar activitats. Per defecte 7 dies."
             }
         },
         "required": []
@@ -25,13 +25,13 @@ get_recent_activities_declaration = FunctionDeclaration(
 
 get_weekly_stats_declaration = FunctionDeclaration(
     name="get_weekly_stats",
-    description="Obtiene estadísticas agregadas por semana de las últimas N semanas (kilómetros totales, número de entrenamientos, ritmo medio por semana)",
+    description="Obté estadístiques agregades per setmana de les últimes N setmanes (quilòmetres totals, nombre d'entrenaments, ritme mitjà per setmana)",
     parameters={
         "type": "object",
         "properties": {
             "weeks": {
                 "type": "integer",
-                "description": "Número de semanas hacia atrás para analizar. Por defecto 4 semanas."
+                "description": "Nombre de setmanes enrere per analitzar. Per defecte 4 setmanes."
             }
         },
         "required": []
@@ -40,13 +40,13 @@ get_weekly_stats_declaration = FunctionDeclaration(
 
 get_activity_details_declaration = FunctionDeclaration(
     name="get_activity_details",
-    description="Obtiene los detalles completos de una actividad específica, incluyendo TODOS los laps/intervalos (series, repeticiones, etc.). Analiza los laps para entender la estructura del entrenamiento. IMPORTANTE: Usa el ID exacto (como string) que obtienes de get_recent_activities.",
+    description="Obté els detalls complets d'una activitat específica, incloent TOTS els laps/intervals (sèries, repeticions, etc.). Analitza els laps per entendre l'estructura de l'entrenament. IMPORTANT: Usa l'ID exacte (com a string) que obtens de get_recent_activities.",
     parameters={
         "type": "object",
         "properties": {
             "activity_id": {
                 "type": "string",
-                "description": "ID de la actividad en Strava (debe ser el ID completo obtenido de get_recent_activities, como string para preservar precisión numérica)"
+                "description": "ID de l'activitat a Strava (ha de ser l'ID complet obtingut de get_recent_activities, com a string per preservar precisió numèrica)"
             }
         },
         "required": ["activity_id"]
@@ -55,7 +55,7 @@ get_activity_details_declaration = FunctionDeclaration(
 
 get_current_plan_declaration = FunctionDeclaration(
     name="get_current_plan",
-    description="Obtiene el plan de entrenamiento activo actual con todos sus entrenamientos planificados (pendientes, completados, saltados)",
+    description="Obté el pla d'entrenament actiu actual amb tots els seus entrenaments planificats (pendents, completats, saltats)",
     parameters={
         "type": "object",
         "properties": {},
@@ -66,43 +66,43 @@ get_current_plan_declaration = FunctionDeclaration(
 
 create_training_plan_declaration = FunctionDeclaration(
     name="create_training_plan",
-    description="Crea un nuevo plan de entrenamiento semanal con los entrenamientos especificados. Úsalo cuando el usuario pida crear/planificar entrenamientos.",
+    description="Crea un nou pla d'entrenament setmanal amb els entrenaments especificats. Usa-ho quan l'usuari demani crear/planificar entrenaments.",
     parameters={
         "type": "object",
         "properties": {
             "week_start_date": {
                 "type": "string",
-                "description": "Fecha de inicio de la semana en formato YYYY-MM-DD (lunes de la semana a planificar)"
+                "description": "Data d'inici de la setmana en format YYYY-MM-DD (dilluns de la setmana a planificar)"
             },
             "workouts": {
                 "type": "array",
-                "description": "Lista de entrenamientos a incluir en el plan",
+                "description": "Llista d'entrenaments a incloure al pla",
                 "items": {
                     "type": "object",
                     "properties": {
                         "date": {
                             "type": "string",
-                            "description": "Fecha del entrenamiento en formato YYYY-MM-DD"
+                            "description": "Data de l'entrenament en format YYYY-MM-DD"
                         },
                         "workout_type": {
                             "type": "string",
-                            "description": "Tipo de entrenamiento: 'calidad', 'tirada_larga', 'rodaje', 'recuperacion', 'tempo', 'series'"
+                            "description": "Tipus d'entrenament: 'calidad', 'tirada_larga', 'rodaje', 'recuperacion', 'tempo', 'series'"
                         },
                         "distance_km": {
                             "type": "number",
-                            "description": "Distancia planificada en kilómetros"
+                            "description": "Distància planificada en quilòmetres"
                         },
                         "description": {
                             "type": "string",
-                            "description": "Descripción detallada del entrenamiento (objetivo, estructura, etc.)"
+                            "description": "Descripció detallada de l'entrenament (objectiu, estructura, etc.)"
                         },
                         "pace_objective": {
                             "type": "string",
-                            "description": "Ritmo objetivo en formato min/km (ej: '5:00' o '4:30-5:00')"
+                            "description": "Ritme objectiu en format min/km (ex: '5:00' o '4:30-5:00')"
                         },
                         "notes": {
                             "type": "string",
-                            "description": "Notas adicionales sobre el entrenamiento"
+                            "description": "Notes addicionals sobre l'entrenament"
                         }
                     },
                     "required": ["date", "workout_type", "distance_km"]
@@ -110,11 +110,11 @@ create_training_plan_declaration = FunctionDeclaration(
             },
             "goal": {
                 "type": "string",
-                "description": "Objetivo del plan (ej: 'Preparación media maratón', 'Mantenimiento', 'Aumentar volumen')"
+                "description": "Objectiu del pla (ex: 'Preparació mitja marató', 'Manteniment', 'Augmentar volum')"
             },
             "notes": {
                 "type": "string",
-                "description": "Notas adicionales sobre el plan completo"
+                "description": "Notes addicionals sobre el pla complet"
             }
         },
         "required": ["week_start_date", "workouts"]
@@ -123,45 +123,45 @@ create_training_plan_declaration = FunctionDeclaration(
 
 update_workout_declaration = FunctionDeclaration(
     name="update_workout",
-    description="Actualiza/modifica un entrenamiento planificado existente. Úsalo para cambiar fecha, distancia, ritmo o cualquier otro campo de un entreno ya planificado.",
+    description="Actualitza/modifica un entrenament planificat existent. Usa-ho per canviar data, distància, ritme o qualsevol altre camp d'un entrenament ja planificat.",
     parameters={
         "type": "object",
         "properties": {
             "workout_id": {
                 "type": "string",
-                "description": "ID del entrenamiento planificado a actualizar (como string)"
+                "description": "ID de l'entrenament planificat a actualitzar (com a string)"
             },
             "changes": {
                 "type": "object",
-                "description": "Diccionario con los campos a actualizar",
+                "description": "Diccionari amb els camps a actualitzar",
                 "properties": {
                     "date": {
                         "type": "string",
-                        "description": "Nueva fecha en formato YYYY-MM-DD"
+                        "description": "Nova data en format YYYY-MM-DD"
                     },
                     "workout_type": {
                         "type": "string",
-                        "description": "Nuevo tipo de entrenamiento"
+                        "description": "Nou tipus d'entrenament"
                     },
                     "distance_km": {
                         "type": "number",
-                        "description": "Nueva distancia en kilómetros"
+                        "description": "Nova distància en quilòmetres"
                     },
                     "description": {
                         "type": "string",
-                        "description": "Nueva descripción"
+                        "description": "Nova descripció"
                     },
                     "pace_objective": {
                         "type": "string",
-                        "description": "Nuevo ritmo objetivo"
+                        "description": "Nou ritme objectiu"
                     },
                     "notes": {
                         "type": "string",
-                        "description": "Nuevas notas"
+                        "description": "Noves notes"
                     },
                     "status": {
                         "type": "string",
-                        "description": "Nuevo estado: 'pending', 'completed', 'skipped'"
+                        "description": "Nou estat: 'pending', 'completed', 'skipped'"
                     }
                 }
             }
@@ -172,33 +172,33 @@ update_workout_declaration = FunctionDeclaration(
 
 add_workout_to_current_plan_declaration = FunctionDeclaration(
     name="add_workout_to_current_plan",
-    description="Añade UN SOLO entrenamiento al plan activo existente sin crear un plan nuevo. Úsalo cuando el usuario quiera añadir entrenos adicionales al plan que ya tiene. IMPORTANTE: NO uses esta función para crear planes completos desde cero, usa create_training_plan para eso.",
+    description="Afegeix UN SOL entrenament al pla actiu existent sense crear un pla nou. Usa-ho quan l'usuari vulgui afegir entrenos addicionals al pla que ja té. IMPORTANT: NO usis aquesta funció per crear plans complets des de zero, usa create_training_plan per això.",
     parameters={
         "type": "object",
         "properties": {
             "date": {
                 "type": "string",
-                "description": "Fecha del entrenamiento en formato YYYY-MM-DD"
+                "description": "Data de l'entrenament en format YYYY-MM-DD"
             },
             "workout_type": {
                 "type": "string",
-                "description": "Tipo de entrenamiento: 'calidad', 'tirada_larga', 'rodaje', 'recuperacion', 'tempo', 'series'"
+                "description": "Tipus d'entrenament: 'calidad', 'tirada_larga', 'rodaje', 'recuperacion', 'tempo', 'series'"
             },
             "distance_km": {
                 "type": "number",
-                "description": "Distancia planificada en kilómetros"
+                "description": "Distància planificada en quilòmetres"
             },
             "description": {
                 "type": "string",
-                "description": "Descripción detallada del entrenamiento"
+                "description": "Descripció detallada de l'entrenament"
             },
             "pace_objective": {
                 "type": "string",
-                "description": "Ritmo objetivo en formato min/km (ej: '5:00' o '4:30-5:00')"
+                "description": "Ritme objectiu en format min/km (ex: '5:00' o '4:30-5:00')"
             },
             "notes": {
                 "type": "string",
-                "description": "Notas adicionales sobre el entrenamiento"
+                "description": "Notes addicionals sobre l'entrenament"
             }
         },
         "required": ["date", "workout_type", "distance_km"]
@@ -207,13 +207,13 @@ add_workout_to_current_plan_declaration = FunctionDeclaration(
 
 delete_workout_declaration = FunctionDeclaration(
     name="delete_workout",
-    description="Elimina un entrenamiento planificado del plan actual. Úsalo cuando el usuario quiera borrar/eliminar un entreno específico o limpiar entrenamientos pendientes.",
+    description="Elimina un entrenament planificat del pla actual. Usa-ho quan l'usuari vulgui esborrar/eliminar un entrenament específic o netejar entrenaments pendents.",
     parameters={
         "type": "object",
         "properties": {
             "workout_id": {
                 "type": "string",
-                "description": "ID del entrenamiento a eliminar (como string). Obtén este ID usando get_current_plan()."
+                "description": "ID de l'entrenament a eliminar (com a string). Obté aquest ID usant get_current_plan()."
             }
         },
         "required": ["workout_id"]
@@ -222,7 +222,7 @@ delete_workout_declaration = FunctionDeclaration(
 
 get_runner_profile_declaration = FunctionDeclaration(
     name="get_runner_profile",
-    description="Obtiene el perfil completo del corredor (antropometría, PRs, objetivos, filosofía de entrenamiento). IMPORTANTE: Usa esta función al inicio de cada conversación para personalizar tus recomendaciones.",
+    description="Obté el perfil complet del corredor (antropometria, PRs, objectius, filosofia d'entrenament). IMPORTANT: Usa aquesta funció a l'inici de cada conversa per personalitzar les teves recomanacions.",
     parameters={
         "type": "object",
         "properties": {},
@@ -232,13 +232,13 @@ get_runner_profile_declaration = FunctionDeclaration(
 
 analyze_performance_trends_declaration = FunctionDeclaration(
     name="analyze_performance_trends",
-    description="Analiza tendencias de rendimiento (FC vs ritmo) para detectar mejoras aeróbicas o señales de fatiga. Examina la evolución de ritmo y FC en entrenamientos similares. Úsalo para evaluar el estado de forma antes de planificar.",
+    description="Analitza tendències de rendiment (FC vs ritme) per detectar millores aeròbiques o senyals de fatiga. Examina l'evolució de ritme i FC en entrenaments similars. Usa-ho per avaluar l'estat de forma abans de planificar.",
     parameters={
         "type": "object",
         "properties": {
             "weeks": {
                 "type": "integer",
-                "description": "Número de semanas hacia atrás para analizar. Por defecto 4 semanas."
+                "description": "Nombre de setmanes enrere per analitzar. Per defecte 4 setmanes."
             }
         },
         "required": []
@@ -247,21 +247,21 @@ analyze_performance_trends_declaration = FunctionDeclaration(
 
 predict_race_times_declaration = FunctionDeclaration(
     name="predict_race_times",
-    description="Predice tiempos de carrera usando la fórmula de Riegel (T2 = T1 * (D2/D1)^1.06). Útil para estimar rendimiento en otras distancias basándote en una marca real. Por ejemplo: 10k en 43:20 → predecir tiempo en media maratón.",
+    description="Prediu temps de carrera usant la fórmula de Riegel (T2 = T1 * (D2/D1)^1.06). Útil per estimar rendiment en altres distàncies basant-te en una marca real. Per exemple: 10k en 43:20 → predir temps en mitja marató.",
     parameters={
         "type": "object",
         "properties": {
             "current_race_distance_km": {
                 "type": "number",
-                "description": "Distancia de la marca actual en kilómetros (ej: 10.0 para 10k, 21.0975 para media)"
+                "description": "Distància de la marca actual en quilòmetres (ex: 10.0 per 10k, 21.0975 per mitja)"
             },
             "current_time_minutes": {
                 "type": "number",
-                "description": "Tiempo en la distancia actual en minutos decimales (ej: 43.33 para 43:20)"
+                "description": "Temps a la distància actual en minuts decimals (ex: 43.33 per 43:20)"
             },
             "target_race_distance_km": {
                 "type": "number",
-                "description": "Distancia objetivo para la predicción en kilómetros (ej: 21.0975 para media maratón)"
+                "description": "Distància objectiu per la predicció en quilòmetres (ex: 21.0975 per mitja marató)"
             }
         },
         "required": ["current_race_distance_km", "current_time_minutes", "target_race_distance_km"]
@@ -270,7 +270,7 @@ predict_race_times_declaration = FunctionDeclaration(
 
 analyze_training_load_advanced_declaration = FunctionDeclaration(
     name="analyze_training_load_advanced",
-    description="Análisis avanzado de carga de entrenamiento con detección de sobreentrenamiento. Examina volumen, intensidad, FC, y palabras clave de fatiga en notas privadas. Proporciona warnings y recomendaciones específicas. Úsalo antes de proponer planes exigentes.",
+    description="Anàlisi avançat de càrrega d'entrenament amb detecció de sobreentrament. Examina volum, intensitat, FC, i paraules clau de fatiga en notes privades. Proporciona avisos i recomanacions específiques. Usa-ho abans de proposar plans exigents.",
     parameters={
         "type": "object",
         "properties": {},
@@ -279,7 +279,7 @@ analyze_training_load_advanced_declaration = FunctionDeclaration(
 )
 
 
-# Agrupar todas las herramientas en un Tool
+# Agrupar totes les eines en un Tool
 running_coach_tools = Tool(
     function_declarations=[
         get_recent_activities_declaration,

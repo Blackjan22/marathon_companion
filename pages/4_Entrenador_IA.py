@@ -285,74 +285,74 @@ with st.sidebar:
 
         st.divider()
 
-    if st.button("🆕 Nueva Conversación"):
+    if st.button("🆕 Nova Conversa"):
         st.session_state.messages = []
         st.rerun()
 
-    if st.button("📥 Cargar historial"):
+    if st.button("📥 Carregar historial"):
         history = load_chat_history(limit=20)
         st.session_state.messages = [
             {"role": msg["role"], "content": msg["content"]}
             for msg in history
         ]
-        st.success(f"Cargados {len(history)} mensajes")
+        st.success(f"Carregats {len(history)} missatges")
         st.rerun()
 
-    if st.button("🔄 Recargar contexto"):
+    if st.button("🔄 Recarregar context"):
         initial_context = ai_context.generate_initial_context()
         greeting = ai_context.get_contextual_greeting()
-        welcome_message = f"{greeting}\n\n**Contexto actualizado:**\n{initial_context}\n\n¿Qué quieres hacer?"
+        welcome_message = f"{greeting}\n\n**Context actualitzat:**\n{initial_context}\n\nEn què et puc ajudar?"
         st.session_state.messages = [{"role": "assistant", "content": welcome_message}]
-        st.success("Contexto recargado")
+        st.success("Context recarregat")
         st.rerun()
 
     st.divider()
 
-    # Contexto actual
-    st.markdown("### 📊 Resumen Rápido")
-    with st.spinner("Cargando..."):
+    # Context actual
+    st.markdown("### 📊 Resum Ràpid")
+    with st.spinner("Carregant..."):
         context = get_context_summary()
         st.caption(context)
 
-    # Análisis de carga
-    with st.expander("📈 Análisis de carga"):
+    # Anàlisi de càrrega
+    with st.expander("📈 Anàlisi de càrrega"):
         load_analysis = ai_context.check_training_load_progression()
         if load_analysis.get('status') == 'warning':
-            st.warning(load_analysis.get('warning', 'Cuidado con la progresión'))
+            st.warning(load_analysis.get('warning', 'Compte amb la progressió'))
         elif load_analysis.get('status') == 'ok':
-            st.success(f"Progresión adecuada: {load_analysis.get('increase_percentage', 0):.1f}%")
+            st.success(f"Progressió adequada: {load_analysis.get('increase_percentage', 0):.1f}%")
         elif load_analysis.get('status') == 'low':
-            st.info(load_analysis.get('warning', 'Volumen reducido'))
+            st.info(load_analysis.get('warning', 'Volum reduït'))
 
     st.divider()
 
-    # Información sobre funciones disponibles
-    with st.expander("🔧 Funciones disponibles (12 funciones)"):
+    # Informació sobre funcions disponibles
+    with st.expander("🔧 Funcions disponibles (12 funcions)"):
         st.markdown("""
-        **✅ Function calling activo**
+        **✅ Function calling actiu**
 
-        El coach puede ejecutar automáticamente estas funciones:
+        L'entrenador pot executar automàticament aquestes funcions:
 
-        **Consulta de datos:**
-        - `get_runner_profile`: Ver tu perfil completo (objetivos, PRs, filosofía)
-        - `get_recent_activities`: Ver tus últimos entrenamientos
-        - `get_weekly_stats`: Estadísticas semanales agregadas
-        - `get_activity_details`: Detalles completos de un entreno (incluyendo notas privadas)
-        - `get_current_plan`: Consultar tu plan activo
+        **Consulta de dades:**
+        - `get_runner_profile`: Veure el teu perfil complet (objectius, PRs, filosofia)
+        - `get_recent_activities`: Veure els teus últims entrenaments
+        - `get_weekly_stats`: Estadístiques setmanals agregades
+        - `get_activity_details`: Detalls complets d'un entrenament (incloent notes privades)
+        - `get_current_plan`: Consultar el teu pla actiu
 
-        **Análisis avanzado:**
-        - `analyze_performance_trends`: Detectar mejoras o fatiga (FC vs ritmo)
-        - `predict_race_times`: Calculadora de equivalencias de tiempos (Fórmula de Riegel)
-        - `analyze_training_load_advanced`: Detectar sobreentrenamiento
+        **Anàlisi avançat:**
+        - `analyze_performance_trends`: Detectar millores o fatiga (FC vs ritme)
+        - `predict_race_times`: Calculadora d'equivalències de temps (Fórmula de Riegel)
+        - `analyze_training_load_advanced`: Detectar sobreentrament
 
-        **Acciones:**
-        - `create_training_plan`: Crear planes de entrenamiento completos
-        - `add_workout_to_current_plan`: Añadir entrenamientos al plan activo
-        - `update_workout`: Modificar entrenamientos planificados
-        - `delete_workout`: Eliminar entrenamientos del plan
+        **Accions:**
+        - `create_training_plan`: Crear plans d'entrenament complets
+        - `add_workout_to_current_plan`: Afegir entrenaments al pla actiu
+        - `update_workout`: Modificar entrenaments planificats
+        - `delete_workout`: Eliminar entrenaments del pla
 
-        El modelo decidirá automáticamente cuándo usar cada función según
-        tu pregunta. Verás un indicador cada vez que se ejecute una función.
+        El model decidirà automàticament quan utilitzar cada funció segons
+        la teva pregunta. Veuràs un indicador cada vegada que s'executi una funció.
         """)
 
 # Inicializar bandera de procesamiento pendiente
@@ -668,62 +668,62 @@ if st.session_state.pending_message:
         process_user_message(prompt)
         st.session_state.pending_message = False
 
-# Input del usuario
-if prompt := st.chat_input("Escribe tu mensaje al coach..."):
-    # Añadir mensaje del usuario
+# Input de l'usuari
+if prompt := st.chat_input("Escriu el teu missatge a l'entrenador..."):
+    # Afegir missatge de l'usuari
     st.session_state.messages.append({"role": "user", "content": prompt})
     save_chat_to_db("user", prompt)
 
-    # Mostrar mensaje del usuario
+    # Mostrar missatge de l'usuari
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Procesar el mensaje
+    # Processar el missatge
     process_user_message(prompt)
 
-# Botones de acción rápida
+# Botons d'acció ràpida
 st.divider()
-st.markdown("### 💡 Acciones Rápidas")
+st.markdown("### 💡 Accions Ràpides")
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    if st.button("📊 Ver mis últimas actividades"):
-        quick_prompt = "Muéstrame un resumen de mis últimos 7 días de entrenamiento"
+    if st.button("📊 Veure les meves últimes activitats"):
+        quick_prompt = "Mostra'm un resum dels meus últims 7 dies d'entrenament"
         st.session_state.messages.append({"role": "user", "content": quick_prompt})
         save_chat_to_db("user", quick_prompt)
         st.session_state.pending_message = True
         st.rerun()
 
 with col2:
-    if st.button("📅 Planificar próxima semana"):
-        quick_prompt = "Necesito que me propongas un plan de entrenamientos para la próxima semana. Primero revisa mis últimos entrenos y pregúntame por mis sensaciones."
+    if st.button("📅 Planificar propera setmana"):
+        quick_prompt = "Necessito que em proposis un pla d'entrenaments per la propera setmana. Primer revisa els meus últims entrenos i pregunta'm per les meves sensacions."
         st.session_state.messages.append({"role": "user", "content": quick_prompt})
         save_chat_to_db("user", quick_prompt)
         st.session_state.pending_message = True
         st.rerun()
 
 with col3:
-    if st.button("🎯 Ver plan actual"):
-        quick_prompt = "¿Cuál es mi plan de entrenamiento actual? ¿Cómo voy?"
+    if st.button("🎯 Veure pla actual"):
+        quick_prompt = "Quin és el meu pla d'entrenament actual? Com vaig?"
         st.session_state.messages.append({"role": "user", "content": quick_prompt})
         save_chat_to_db("user", quick_prompt)
         st.session_state.pending_message = True
         st.rerun()
 
-# Información adicional
-with st.expander("ℹ️ Cómo usar el Coach IA"):
+# Informació addicional
+with st.expander("ℹ️ Com utilitzar l'Entrenador IA"):
     st.markdown("""
-    **Consejos para interactuar con tu coach:**
+    **Consells per interactuar amb el teu entrenador:**
 
-    1. **Sé específico**: Cuéntale tus objetivos, sensaciones y dudas
-    2. **Comparte feedback**: Después de cada entreno, cuéntale cómo te sentiste
-    3. **Pregunta libremente**: El coach tiene acceso a todos tus datos de Strava
-    4. **Planificación semanal**: Pídele que revise tu semana antes de planificar la siguiente
+    1. **Sigues específic**: Explica'li els teus objectius, sensacions i dubtes
+    2. **Comparteix feedback**: Després de cada entreno, explica-li com et vas sentir
+    3. **Pregunta lliurement**: L'entrenador té accés a totes les teves dades de Strava
+    4. **Planificació setmanal**: Demana-li que revisi la teva setmana abans de planificar la següent
 
-    **Ejemplos de preguntas:**
-    - "¿Cómo ha sido mi progreso en las últimas 4 semanas?"
-    - "Hoy hice 10km y me sentí muy cansado, ¿qué entreno me recomiendas para mañana?"
-    - "Quiero preparar una media maratón en 3 meses, ¿qué plan me sugieres?"
-    - "Muéstrame los detalles de mi último entreno de series"
+    **Exemples de preguntes:**
+    - "Com ha estat el meu progrés en les últimes 4 setmanes?"
+    - "Avui vaig fer 10km i em vaig sentir molt cansat, quin entrenament em recomaneu per demà?"
+    - "Vull preparar una mitja marató en 3 mesos, quin pla em suggereixes?"
+    - "Mostra'm els detalls del meu últim entreno de sèries"
     """)

@@ -12,7 +12,7 @@ from .db_config import get_connection
 
 def get_recent_activities(days: int = 7) -> dict:
     """
-    Obtiene las actividades de running de los últimos N días.
+    Obté les activitats de running dels últims N dies.
 
     Args:
         days: Número de días hacia atrás para buscar actividades (por defecto 7)
@@ -58,7 +58,7 @@ def get_recent_activities(days: int = 7) -> dict:
 
 def get_weekly_stats(weeks: int = 4) -> dict:
     """
-    Obtiene estadísticas agregadas por semana de las últimas N semanas.
+    Obté estadístiques agregades per setmana de les últimes N setmanes.
 
     Args:
         weeks: Número de semanas hacia atrás (por defecto 4)
@@ -98,7 +98,7 @@ def get_weekly_stats(weeks: int = 4) -> dict:
 
 def get_activity_details(activity_id) -> dict:
     """
-    Obtiene los detalles completos de una actividad específica, incluyendo laps.
+    Obté els detalls complets d'una activitat específica, incloent laps.
 
     Args:
         activity_id: ID de la actividad en Strava (puede ser int o string)
@@ -163,7 +163,7 @@ def get_activity_details(activity_id) -> dict:
 
 def get_current_plan() -> dict:
     """
-    Obtiene el plan de entrenamiento activo actual con todos sus entrenamientos.
+    Obté el pla d'entrenament actiu actual amb tots els seus entrenaments.
 
     Returns:
         Diccionario con el plan actual y sus entrenamientos planificados
@@ -373,7 +373,7 @@ def delete_workout(workout_id) -> dict:
 
 def get_runner_profile() -> dict:
     """
-    Obtiene el perfil completo del corredor para personalizar recomendaciones.
+    Obté el perfil complet del corredor per personalitzar recomanacions.
 
     Returns:
         Diccionario con toda la información del perfil del corredor
@@ -441,7 +441,7 @@ def analyze_performance_trends(weeks: int = 4) -> dict:
     if df.empty or len(df) < 3:
         return {
             "status": "insufficient_data",
-            "message": "Se necesitan al menos 3 entrenamientos con FC en las últimas semanas"
+            "message": "Es necessiten almenys 3 entrenaments amb FC en les últimes setmanes"
         }
 
     # Analizar rodajes fáciles (ritmo > 5:00/km)
@@ -619,7 +619,7 @@ def analyze_training_load_advanced() -> dict:
     if df.empty or len(df) < 2:
         return {
             "status": "insufficient_data",
-            "message": "Se necesitan al menos 2 semanas de datos"
+            "message": "Es necessiten almenys 2 setmanes de dades"
         }
 
     # Análisis de progresión de carga
