@@ -98,13 +98,13 @@ def get_weekly_stats(weeks: int = 4) -> dict:
 
 def get_activity_details(activity_id) -> dict:
     """
-    Obté els detalls complets d'una activitat específica, incloent laps.
+    Obté els detalls complets d'una activitat específica, incloent laps i splits.
 
     Args:
         activity_id: ID de la actividad en Strava (puede ser int o string)
 
     Returns:
-        Diccionario con información detallada de la actividad y sus laps
+        Diccionario con información detallada de la actividad, sus laps y splits
     """
     # Convertir a int si viene como string (para compatibilidad con Gemini)
     if isinstance(activity_id, str):
@@ -133,7 +133,21 @@ def get_activity_details(activity_id) -> dict:
         conn.close()
         return {"error": f"Activity {activity_id} not found"}
 
-    # Laps de la actividad
+    # Splits de la actividad (km automáticos con elevation_difference con signo)
+    splits_query = """
+        SELECT
+            split,
+            distance/1000 as distance_km,
+            elapsed_time,
+            elevation_difference,
+            average_speed
+        FROM splits
+        WHERE activity_id = ?
+        ORDER BY split
+    """
+    splits_df = pd.read_sql_query(splits_query, conn, params=(activity_id,))
+
+    # Laps de la actividad (parciales/intervalos con total_elevation_gain)
     laps_query = """
         SELECT
             lap_index, name,
@@ -152,10 +166,13 @@ def get_activity_details(activity_id) -> dict:
     # Convertir ID a string para evitar pérdida de precisión
     activity_info['id'] = str(activity_info['id'])
 
+    splits_info = splits_df.to_dict('records') if not splits_df.empty else []
     laps_info = laps_df.to_dict('records') if not laps_df.empty else []
 
     return {
         "activity": activity_info,
+        "splits": splits_info,
+        "num_splits": len(splits_info),
         "laps": laps_info,
         "num_laps": len(laps_info)
     }

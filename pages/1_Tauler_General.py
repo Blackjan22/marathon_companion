@@ -23,7 +23,7 @@ if not check_password():
 add_logout_button()
 
 # Carregar dades (utilitzarà la caché)
-activities, splits = load_data()
+activities, splits, laps = load_data()
 
 st.title(t("dashboard_title"))
 

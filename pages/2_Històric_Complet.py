@@ -116,13 +116,13 @@ st.dataframe(
 )
 
 # =====================
-#   ANÀLISI DE LAPS
+#   ANÀLISI DE SPLITS (KM AUTOMÀTICS)
 # =====================
 st.divider()
-st.subheader(t("laps_analysis"))
+st.subheader("Anàlisi de Splits per Km")
 
-if laps.empty:
-    st.warning(t("no_laps"))
+if splits.empty:
+    st.warning("No hi ha dades de splits disponibles.")
     st.stop()
 
 # Limitar selección a actividades filtradas arriba
@@ -140,12 +140,12 @@ activity_options['display'] = activity_options.apply(
     axis=1
 )
 selected_activity_id = st.selectbox(
-    "Tria una cursa per analitzar les seves voltes:",
+    "Tria una cursa per analitzar els seus splits per km:",
     options=activity_options['id'],
     format_func=lambda x: activity_options[activity_options['id'] == x]['display'].iloc[0]
 )
 
-activity_laps = laps[laps['activity_id'] == selected_activity_id].copy()
+activity_splits = splits[splits['activity_id'] == selected_activity_id].copy()
 activity_info = activities[activities['id'] == selected_activity_id].iloc[0]
 
 # Mètriques principals
@@ -168,53 +168,59 @@ if comentarios:
     st.markdown(f"**Notes:** {comentarios}")
 
 # Gràfics i detall
-if not activity_laps.empty:
+if not activity_splits.empty:
 
-    st.subheader(t("lap_pace_chart"))
+    st.subheader("Perfil d'Elevació i Ritme")
 
     # ----- Preparar series -----
-    def _get_lap_no(df: pd.DataFrame) -> pd.Series:
-        if 'lap_index' in df.columns:
-            return pd.to_numeric(df['lap_index'], errors='coerce')
-        elif 'split' in df.columns:
+    def _get_split_no(df: pd.DataFrame) -> pd.Series:
+        if 'split' in df.columns:
             return pd.to_numeric(df['split'], errors='coerce')
         else:
             return pd.Series(range(1, len(df) + 1), index=df.index)
 
-    x = _get_lap_no(activity_laps)
+    x = _get_split_no(activity_splits)
 
-    dist_m = pd.to_numeric(activity_laps.get('distance', pd.Series(index=activity_laps.index)), errors='coerce')
-    mov_s  = pd.to_numeric(activity_laps.get('moving_time', pd.Series(index=activity_laps.index)), errors='coerce')
-    avg_v  = pd.to_numeric(activity_laps.get('average_speed', pd.Series(index=activity_laps.index)), errors='coerce')
+    dist_m = pd.to_numeric(activity_splits.get('distance', pd.Series(index=activity_splits.index)), errors='coerce')
+    elap_s  = pd.to_numeric(activity_splits.get('elapsed_time', pd.Series(index=activity_splits.index)), errors='coerce')
+    avg_v  = pd.to_numeric(activity_splits.get('average_speed', pd.Series(index=activity_splits.index)), errors='coerce')
 
-    def _pace_min_km(distance_m, moving_time_s, avg_speed_mps):
+    def _pace_min_km(distance_m, elapsed_time_s, avg_speed_mps):
         # Prioriza velocidad media si está disponible; si no, calcula por distancia/tiempo.
         if pd.notnull(avg_speed_mps) and avg_speed_mps > 0:
             return 16.6666667 / float(avg_speed_mps)  # (1000/60) / m/s
-        if pd.notnull(distance_m) and pd.notnull(moving_time_s) and distance_m > 0 and moving_time_s > 0:
-            return (float(moving_time_s) / float(distance_m)) * (1000.0 / 60.0)
+        if pd.notnull(distance_m) and pd.notnull(elapsed_time_s) and distance_m > 0 and elapsed_time_s > 0:
+            return (float(elapsed_time_s) / float(distance_m)) * (1000.0 / 60.0)
         return None
 
-    pace = [ _pace_min_km(dm, mt, spd) for dm, mt, spd in zip(dist_m, mov_s, avg_v) ]
+    pace = [ _pace_min_km(dm, et, spd) for dm, et, spd in zip(dist_m, elap_s, avg_v) ]
 
-    has_elev = 'total_elevation_gain' in activity_laps.columns
-    elev = activity_laps['total_elevation_gain'].fillna(0) if has_elev else None
+    # IMPORTANT: Crear perfil d'elevació acumulat (com Strava)
+    has_elev = 'elevation_difference' in activity_splits.columns
+    if has_elev:
+        # Sumar acumulativament els elevation_difference per obtenir el perfil
+        elev_cumsum = activity_splits['elevation_difference'].fillna(0).cumsum()
+        # Normalitzar perquè el mínim sigui 0 (desplaçar tot el perfil cap amunt)
+        elev_min = elev_cumsum.min()
+        elev_normalized = elev_cumsum - elev_min
+    else:
+        elev_normalized = None
 
     # ----- Figura con eje secundario -----
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-    # PERFIL EN ÁREA: Ganancia de elevación (Y izquierda)
-    if has_elev:
+    # PERFIL EN ÁREA: Elevació normalitzada (perfil continu)
+    if has_elev and elev_normalized is not None:
         fig.add_trace(
             go.Scatter(
                 x=x,
-                y=elev,
+                y=elev_normalized,
                 mode="lines",
                 fill="tozeroy",
-                name="Ganancia elev. (m)",
-                line=dict(width=0),        # solo área
-                opacity=0.45,
-                hovertemplate="Lap: %{x}<br>Desnivel: %{y:.0f} m<extra></extra>",
+                name="Perfil d'elevació",
+                line=dict(width=2, color='rgb(100, 149, 237)'),
+                fillcolor='rgba(100, 149, 237, 0.2)',
+                hovertemplate="Km: %{x}<br>Elevació relativa: %{y:.1f} m<extra></extra>",
                 connectgaps=False
             ),
             secondary_y=False
@@ -226,10 +232,10 @@ if not activity_laps.empty:
             x=x,
             y=pace,
             mode="lines+markers",
-            name="Ritmo (min/km)",
+            name="Ritme (min/km)",
             line=dict(width=2, dash="dot"),
             marker=dict(size=6),
-            hovertemplate="Lap: %{x}<br>Ritmo: %{text}<extra></extra>",
+            hovertemplate="Km: %{x}<br>Ritme: %{text}<extra></extra>",
             text=[format_pace(p) if p is not None else t("not_available") for p in pace],
             connectgaps=False
         ),
@@ -259,18 +265,19 @@ if not activity_laps.empty:
         y2_min, y2_max = 4.0, 8.0  # rango razonable en min/km
 
     pad = 0.15
-    fig.update_xaxes(title_text="Lap #", type="linear", dtick=1)
+    fig.update_xaxes(title_text="Distància (km)", type="linear", dtick=1)
     fig.update_yaxes(
-        title_text="Desnivel (m)",
+        title_text="Elevació relativa (m)",
         secondary_y=False,
-        showgrid=True, zeroline=True, zerolinewidth=1
+        showgrid=True, zeroline=True, zerolinewidth=1.5,
+        rangemode='tozero'
     )
     fig.update_yaxes(
-        title_text="Ritmo (min/km)",
+        title_text="Ritme (min/km)",
         secondary_y=True,
         showgrid=False, showline=True, ticks="outside",
         autorange=False,
-        range=[y2_max + pad, y2_min - pad]   # invertido (más rápido arriba)
+        range=[y2_max + pad, y2_min - pad]   # invertit (més ràpid a dalt)
     )
 
     fig.update_layout(
@@ -281,41 +288,33 @@ if not activity_laps.empty:
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # ----- Taula de detall de laps -----
-    st.subheader("Detall de Voltes")
+    # ----- Taula de detall de splits -----
+    st.subheader("Detall per Km")
 
-    laps_display = activity_laps.copy()
-    laps_display['Ritme'] = [format_pace(p) if p is not None else t("not_available") for p in pace]
+    splits_display = activity_splits.copy()
+    splits_display['Ritme'] = [format_pace(p) if p is not None else t("not_available") for p in pace]
 
-    if 'moving_time' in laps_display.columns:
-        laps_display['Temps (mov)'] = laps_display['moving_time'].apply(format_time)
-    if 'elapsed_time' in laps_display.columns:
-        laps_display['Temps (total)'] = laps_display['elapsed_time'].apply(format_time)
-    if 'distance' in laps_display.columns:
-        laps_display['Distància (m)'] = laps_display['distance'].round(0)
-    if 'total_elevation_gain' in laps_display.columns:
-        laps_display['Desnivell (m)'] = laps_display['total_elevation_gain'].fillna(0).round(0).astype(int)
-    if 'average_heartrate' in laps_display.columns:
-        laps_display['FC Prom.'] = laps_display['average_heartrate'].fillna(0).round(0).astype(int).astype(str).replace('0', t("not_available"))
-    if 'average_cadence' in laps_display.columns:
-        # Algunes APIs retornen cadència en passos/min (running) o rpm (ciclisme)
-        laps_display['Cadència'] = laps_display['average_cadence'].round(0).astype('Int64').astype(str)
+    if 'elapsed_time' in splits_display.columns:
+        splits_display['Temps'] = splits_display['elapsed_time'].apply(format_time)
+    if 'distance' in splits_display.columns:
+        splits_display['Distància (m)'] = splits_display['distance'].round(0)
+    # IMPORTANT: Usar elevation_difference (amb signe) en lloc de total_elevation_gain
+    if 'elevation_difference' in splits_display.columns:
+        splits_display['Desnivell (m)'] = splits_display['elevation_difference'].fillna(0).round(1)
 
-    # Columna d'índex de lap
-    if 'lap_index' in laps_display.columns:
-        idx_col = 'lap_index'
-    elif 'split' in laps_display.columns:
+    # Columna d'índex de split
+    if 'split' in splits_display.columns:
         idx_col = 'split'
     else:
-        idx_col = '_lap_tmp_index'
-        laps_display[idx_col] = range(1, len(laps_display) + 1)
+        idx_col = '_split_tmp_index'
+        splits_display[idx_col] = range(1, len(splits_display) + 1)
 
-    cols = [idx_col] + [c for c in ['Distància (m)', 'Temps (mov)', 'Temps (total)', 'Ritme', 'Desnivell (m)', 'FC Prom.', 'Cadència'] if c in laps_display.columns]
+    cols = [idx_col] + [c for c in ['Distància (m)', 'Temps', 'Ritme', 'Desnivell (m)'] if c in splits_display.columns]
 
     st.dataframe(
-        laps_display[cols].rename(columns={idx_col: 'Volta #'}),
+        splits_display[cols].rename(columns={idx_col: 'Km #'}),
         use_container_width=True,
         hide_index=True
     )
 else:
-    st.info("Aquesta activitat no té dades de voltes disponibles.")
+    st.info("Aquesta activitat no té dades de splits disponibles.")
